@@ -1,93 +1,95 @@
-# LLM Service
+<div align="right">[\[English\]](./llm-service.en-US.md)</div>
 
-## Overview
+# LLM 服务
 
-The LLM service (`app/services/llm/`) handles all language model calls with automatic retries, circular model fallback, and a total timeout budget. Your agent code calls `llm_service.call(messages)` — the service handles everything else.
+## 概述
 
-The package is split into two modules:
+LLM 服务（`app/services/llm/`）处理所有语言模型调用，具有自动重试、循环模型降级和总超时预算。您的 agent 代码调用 `llm_service.call(messages)` — 服务处理其他所有内容。
 
-- `app/services/llm/registry.py` — `LLMRegistry`: defines available models
-- `app/services/llm/service.py` — `LLMService`: call logic, retries, fallback, structured output
+该包分为两个模块：
 
-## Model registry
+- `app/services/llm/registry.py` — `LLMRegistry`：定义可用模型
+- `app/services/llm/service.py` — `LLMService`：调用逻辑、重试、降级、结构化输出
 
-Models are defined in `LLMRegistry.LLMS` in order of preference:
+## 模型注册表
 
-| Name           | Model        | Notes                                  |
-| -------------- | ------------ | -------------------------------------- |
-| `gpt-5-mini`   | gpt-5-mini   | Default. Low reasoning effort.         |
-| `gpt-5.4`      | gpt-5        | Medium reasoning effort.               |
-| `gpt-5.4-nano` | gpt-5.4-nano | Fast, low reasoning effort.            |
-| `gpt-5`        | gpt-5        | Full model, production-tuned sampling. |
+模型按优先级顺序在 `LLMRegistry.LLMS` 中定义：
 
-Set `DEFAULT_LLM_MODEL` in your `.env` to choose the starting model.
+| 名称 | 模型 | 说明 |
+| --- | --- | --- |
+| `gpt-5-mini` | gpt-5-mini | 默认。低推理成本。 |
+| `gpt-5.4` | gpt-5 | 中等推理成本。 |
+| `gpt-5.4-nano` | gpt-5.4-nano | 快速，低推理成本。 |
+| `gpt-5` | gpt-5 | 完整模型，生产调优采样。 |
 
-To add or change models, edit `LLMRegistry.LLMS` in `app/services/llm/registry.py`.
+在 `.env` 中设置 `DEFAULT_LLM_MODEL` 以选择起始模型。
 
-## Retry and fallback behaviour
+添加或更改模型，编辑 `app/services/llm/registry.py` 中的 `LLMRegistry.LLMS`。
+
+## 重试和降级行为
 
 ```mermaid
 flowchart TD
     Call["llm_service.call(messages)"]
-    TotalTimeout["asyncio.wait_for\nLLM_TOTAL_TIMEOUT seconds"]
-    Try["Try current model"]
-    Retry{"Retryable error?\n(rate limit, timeout, API error)"}
-    MaxRetries{"MAX_LLM_CALL_RETRIES\nreached?"}
-    NextModel{"More models\nto try?"}
-    Backoff["Exponential backoff\n2s → 4s → 8s"]
-    Switch["Switch to next model\n(circular)"]
-    Success["Return response"]
-    Fail["Raise RuntimeError"]
+    TotalTimeout["asyncio.wait_for\nLLM_TOTAL_TIMEOUT 秒"]
+    Try["尝试当前模型"]
+    Retry{"可重试错误？\n(限流, 超时, API 错误)"}
+    MaxRetries{"达到\nMAX_LLM_CALL_RETRIES？"}
+    NextModel{"还有更多\n模型要尝试？"}
+    Backoff["指数退避\n2s → 4s → 8s"]
+    Switch["切换到下一个模型\n(循环)"]
+    Success["返回响应"]
+    Fail["抛出 RuntimeError"]
 
     Call --> TotalTimeout --> Try
     Try --> Retry
-    Retry -->|yes| Backoff --> MaxRetries
-    MaxRetries -->|no| Try
-    MaxRetries -->|yes| NextModel
-    Retry -->|no| Fail
-    NextModel -->|yes| Switch --> Try
-    NextModel -->|no| Fail
-    Try -->|success| Success
+    Retry -->|是| Backoff --> MaxRetries
+    MaxRetries -->|否| Try
+    MaxRetries -->|是| NextModel
+    Retry -->|否| Fail
+    NextModel -->|是| Switch --> Try
+    NextModel -->|否| Fail
+    Try -->|成功| Success
 ```
 
-**Retry config** (per model):
+**每模型重试配置**：
 
-- Max attempts: `MAX_LLM_CALL_RETRIES` (default: 3)
-- Wait: exponential backoff, 2s min, 10s max
-- Retries on: `RateLimitError`, `APITimeoutError`, `APIError`
+- 最大尝试次数：`MAX_LLM_CALL_RETRIES`（默认：3）
+- 等待时间：指数退避，最小 2s，最大 10s
+- 重试条件：`RateLimitError`、`APITimeoutError`、`APIError`
 
-**Total timeout**: `LLM_TOTAL_TIMEOUT` seconds (default: 60s) caps the entire loop. Without this, worst case is `retries × models × max_wait` — potentially 2+ minutes.
+**总超时**：`LLM_TOTAL_TIMEOUT` 秒（默认：60s）限制整个循环。没有此限制，最坏情况是 `retries × models × max_wait` — 可能超过 2 分钟。
 
-**Fallback order**: circular through `LLMRegistry.LLMS`. After the last model, wraps back to the first and stops after one full cycle.
+**降级顺序**：循环遍历 `LLMRegistry.LLMS`。在最后一个模型之后，循环回到第一个，并在一个完整周期后停止。
 
-## Tools
+## 工具
 
-Tools are bound to the LLM at startup:
+工具在启动时绑定到 LLM：
 
 ```python
 llm_service.bind_tools(tools)
 ```
 
-When a model is switched during fallback, the tools are re-bound to the new model automatically.
+在降级期间切换模型时，工具会自动重新绑定到新模型。
 
-## Structured output
+## 结构化输出
 
-Pass a Pydantic model as `response_format` to get a validated instance back instead of a raw `BaseMessage`:
+传递 Pydantic 模型作为 `response_format`，以获取经过验证的实例而不是原始 `BaseMessage`：
 
 ```python
 from app.schemas.my_schema import MySchema
 
 result: MySchema = await llm_service.call(
     messages,
-    model_name="gpt-5.4-nano",   # optional — uses current default if omitted
+    model_name="gpt-5.4-nano",   # 可选 — 省略时使用当前默认值
     response_format=MySchema,
     temperature=0.2,
 )
 ```
 
-The service chains `.with_structured_output(schema)` on the resolved model and re-wraps it on every fallback attempt, so retries and model switching work transparently.
+服务在解析的模型上链接 `.with_structured_output(schema)`，并在每次降级尝试时重新包装，因此重试和模型切换透明工作。
 
-## Adding a new model
+## 添加新模型
 
 ```python
 # app/services/llm/registry.py — LLMRegistry.LLMS
@@ -101,4 +103,4 @@ The service chains `.with_structured_output(schema)` on the resolved model and r
 },
 ```
 
-Add it at any position in the list. The fallback order follows the list order.
+在列表中的任意位置添加。降级顺序遵循列表顺序。

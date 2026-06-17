@@ -1,69 +1,71 @@
-# Getting Started
+<div align="right">[\[English\]](./getting-started.en-US.md)</div>
 
-## Prerequisites
+# 快速开始
+
+## 前置要求
 
 - Python 3.13+
-- [uv](https://docs.astral.sh/uv/) — `pip install uv`
-- Docker + Docker Compose (recommended for local dev)
-- OpenAI API key
-- Langfuse account (optional — set `LANGFUSE_TRACING_ENABLED=false` to skip)
+- uv — `pip install uv`
+- Docker + Docker Compose（本地开发推荐）
+- OpenAI API 密钥
+- Langfuse 账户（可选 — 设置 `LANGFUSE_TRACING_ENABLED=false` 跳过）
 
-## Option A: Docker (recommended)
+## 选项 A：Docker（推荐）
 
-The fastest way to get running. One command starts the API and PostgreSQL with pgvector.
-
-```bash
-git clone <repo-url> my-agent
-cd my-agent
-
-# Copy and fill in your env file
-cp .env.example .env.development
-# Required: OPENAI_API_KEY, JWT_SECRET_KEY
-# Optional: LANGFUSE_* keys (or set LANGFUSE_TRACING_ENABLED=false)
-
-make install       # installs Python deps + pre-commit hooks
-make docker-up     # starts API (port 8000) + PostgreSQL
-make docker-migrate # runs Alembic migrations inside the app container
-```
-
-Open [http://localhost:8000/docs](http://localhost:8000/docs).
-
-## Option B: Local Python
+最快的方式。一个命令启动 API 和带 pgvector 的 PostgreSQL。
 
 ```bash
 git clone <repo-url> my-agent
 cd my-agent
 
+# 复制并填写您的环境文件
 cp .env.example .env.development
-# Fill in: OPENAI_API_KEY, JWT_SECRET_KEY, POSTGRES_* (point to your DB)
+# 必需：OPENAI_API_KEY, JWT_SECRET_KEY
+# 可选：LANGFUSE_* 密钥（或设置 LANGFUSE_TRACING_ENABLED=false）
 
-make install       # installs deps + pre-commit hooks
-make migrate       # creates tables via Alembic
-make dev           # starts server with hot reload on port 8000
+make install       # 安装 Python 依赖 + pre-commit hooks
+make docker-up     # 启动 API (port 8000) + PostgreSQL
+make docker-migrate # 在应用容器内运行 Alembic 迁移
 ```
 
-## Your first API call
+打开 http://localhost:8000/docs 查看交互式 API。
 
-### 1. Register a user
+## 选项 B：本地 Python
+
+```bash
+git clone <repo-url> my-agent
+cd my-agent
+
+cp .env.example .env.development
+# 填写：OPENAI_API_KEY, JWT_SECRET_KEY, POSTGRES_*（指向您的数据库）
+
+make install       # 安装依赖 + pre-commit hooks
+make migrate       # 通过 Alembic 创建表
+make dev           # 启动热重载服务器，端口 8000
+```
+
+## 您的第一个 API 调用
+
+### 1. 注册用户
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "password": "Secret123!", "username": "you"}'  # pragma: allowlist secret
+  -d '{"email": "you@example.com", "password": "Secret123!", "username": "you"}'
 ```
 
-Returns a `user_id` and a JWT token.
+返回 `user_id` 和 JWT 令牌。
 
-### 2. Create a session
+### 2. 创建会话
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/auth/session \
   -H "Authorization: Bearer <token from step 1>"
 ```
 
-Returns a `session_id` and a session-scoped JWT.
+返回 `session_id` 和作用域为会话的 JWT。
 
-### 3. Chat
+### 3. 聊天
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/chatbot/chat \
@@ -72,7 +74,7 @@ curl -X POST http://localhost:8000/api/v1/chatbot/chat \
   -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
-Or use the streaming endpoint for real-time responses:
+或使用流式端点获取实时响应：
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/chatbot/chat/stream \
@@ -81,40 +83,37 @@ curl -X POST http://localhost:8000/api/v1/chatbot/chat/stream \
   -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
-## Customising the agent
+## 自定义 agent
 
-The parts you'll most likely change:
+您最可能更改的部分：
 
-| What | Where |
+| 内容 | 位置 |
 |---|---|
-| Agent personality & instructions | `app/core/prompts/system.md` |
-| Available tools | `app/core/langgraph/tools.py` |
-| LLM models & fallback order | `app/services/llm.py` → `LLMRegistry.LLMS` |
-| Memory collection name | `LONG_TERM_MEMORY_COLLECTION_NAME` in `.env` |
+| Agent 个性与指令 | `app/core/prompts/system.md` |
+| 可用工具 | `app/core/langgraph/tools.py` |
+| LLM 模型与降级顺序 | `app/services/llm.py` → `LLMRegistry.LLMS` |
+| 记忆集合名称 | `.env` 中的 `LONG_TERM_MEMORY_COLLECTION_NAME` |
 
-## Running pre-commit hooks
+## 运行 pre-commit hooks
 
-Hooks run automatically on `git commit`. To run manually:
+Hooks 在 `git commit` 时自动运行。手动运行：
 
 ```bash
 make pre-commit
 ```
 
-Hooks include: trailing whitespace, YAML/TOML/JSON validation, secret detection, ruff lint + format.
+Hooks 包括：尾部空白检查、YAML/TOML/JSON 验证、秘密检测、ruff lint + format。
 
-## Troubleshooting
+## 故障排除
 
-**Database connection error on startup**
-Make sure PostgreSQL is running and `POSTGRES_*` vars in your `.env` match. With Docker: `make docker-up` handles this (including migrations).
+**启动时数据库连接错误**
+确保 PostgreSQL 正在运行，且 `.env` 中的 `POSTGRES_*` 变量匹配。使用 Docker：`make docker-up` 处理（包括迁移）。
 
 **`could not translate host name "db"`**
-`POSTGRES_HOST=db` only resolves *inside* the Docker network (it's the Compose
-service name). If you run a command on your host (e.g. `make migrate` or `make dev`
-in the local-Python flow), set `POSTGRES_HOST=localhost` instead — the DB's port is
-published to the host via `docker-compose.yml`. Inside the container, keep `db`.
+`POSTGRES_HOST=db` 仅在 Docker 网络内解析（这是 Compose 服务名）。如果在主机上运行命令（例如本地 Python 流程中的 `make migrate` 或 `make dev`），请改为设置 `POSTGRES_HOST=localhost` — 数据库端口通过 `docker-compose.yml` 发布到主机。在容器内，保持使用 `db`。
 
-**`detect-secrets` blocking a commit**
-If it's a false positive, add `# pragma: allowlist secret` to the end of the flagged line.
+**`detect-secrets` 阻止提交**
+如果是误报，在被标记行的末尾添加 `# pragma: allowlist secret`。
 
-**Langfuse errors**
-Set `LANGFUSE_TRACING_ENABLED=false` in your `.env` to disable tracing entirely during development.
+**Langfuse 错误**
+在 `.env` 中设置 `LANGFUSE_TRACING_ENABLED=false` 在开发期间完全禁用追踪。
