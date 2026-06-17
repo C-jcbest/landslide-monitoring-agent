@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./configuration.en-US.md)</div>
+<div align="right"><a href="./configuration.en-US.md">English</a></div>
 
 # 配置
 

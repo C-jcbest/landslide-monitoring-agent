@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./memory.en-US.md)</div>
+<div align="right"><a href="./memory.en-US.md">English</a></div>
 
 # 记忆
 

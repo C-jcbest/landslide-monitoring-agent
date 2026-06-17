@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./observability.en-US.md)</div>
+<div align="right"><a href="./observability.en-US.md">English</a></div>
 
 # 可观测性
 

@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./memory.md)</div>
+<div align="right"><a href="./memory.md">简体中文</a></div>
 
 # Memory
 

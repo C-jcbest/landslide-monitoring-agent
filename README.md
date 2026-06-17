@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./README.en-US.md)</div>
+<div align="right"><a href="./README.en-US.md">English</a></div>
 
 # FastAPI LangGraph Agent 模板
 

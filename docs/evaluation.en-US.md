@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./evaluation.md)</div>
+<div align="right"><a href="./evaluation.md">简体中文</a></div>
 
 # Evaluation
 

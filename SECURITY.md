@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./SECURITY.en-US.md)</div>
+<div align="right"><a href="./SECURITY.en-US.md">English</a></div>
 
 # 安全策略
 

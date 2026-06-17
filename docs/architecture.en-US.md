@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./architecture.md)</div>
+<div align="right"><a href="./architecture.md">简体中文</a></div>
 
 # Architecture
 

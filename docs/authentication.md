@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./authentication.en-US.md)</div>
+<div align="right"><a href="./authentication.en-US.md">English</a></div>
 
 # 认证
 

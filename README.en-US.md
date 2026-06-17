@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./README.md)</div>
+<div align="right"><a href="./README.md">简体中文</a></div>
 
 # FastAPI LangGraph Agent Template
 

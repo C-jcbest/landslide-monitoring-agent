@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./database.en-US.md)</div>
+<div align="right"><a href="./database.en-US.md">English</a></div>
 
 # 数据库与迁移
 

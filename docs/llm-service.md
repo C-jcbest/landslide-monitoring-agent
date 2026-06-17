@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./llm-service.en-US.md)</div>
+<div align="right"><a href="./llm-service.en-US.md">English</a></div>
 
 # LLM 服务
 

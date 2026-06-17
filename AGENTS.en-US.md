@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./AGENTS.md)</div>
+<div align="right"><a href="./AGENTS.md">简体中文</a></div>
 
 # AI Agent Development Guide
 

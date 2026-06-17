@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./observability.md)</div>
+<div align="right"><a href="./observability.md">简体中文</a></div>
 
 # Observability
 

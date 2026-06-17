@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./architecture.en-US.md)</div>
+<div align="right"><a href="./architecture.en-US.md">English</a></div>
 
 # 架构
 

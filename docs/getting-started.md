@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./getting-started.en-US.md)</div>
+<div align="right"><a href="./getting-started.en-US.md">English</a></div>
 
 # 快速开始
 

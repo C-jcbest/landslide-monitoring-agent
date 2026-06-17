@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./getting-started.md)</div>
+<div align="right"><a href="./getting-started.md">简体中文</a></div>
 
 # Getting Started
 

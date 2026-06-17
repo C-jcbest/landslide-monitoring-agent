@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./AGENTS.en-US.md)</div>
+<div align="right"><a href="./AGENTS.en-US.md">English</a></div>
 
 # AI Agent 开发指南
 

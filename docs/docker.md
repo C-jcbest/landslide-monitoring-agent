@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./docker.en-US.md)</div>
+<div align="right"><a href="./docker.en-US.md">English</a></div>
 
 # Docker
 

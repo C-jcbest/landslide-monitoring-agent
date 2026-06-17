@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./database.md)</div>
+<div align="right"><a href="./database.md">简体中文</a></div>
 
 # Database & Migrations
 

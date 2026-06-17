@@ -1,4 +1,4 @@
-<div align="right">[\[English\]](./evaluation.en-US.md)</div>
+<div align="right"><a href="./evaluation.en-US.md">English</a></div>
 
 # 评估
 

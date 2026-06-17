@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./configuration.md)</div>
+<div align="right"><a href="./configuration.md">简体中文</a></div>
 
 # Configuration
 

@@ -1,4 +1,4 @@
-<div align="right">[\[简体中文\]](./SECURITY.md)</div>
+<div align="right"><a href="./SECURITY.md">简体中文</a></div>
 
 # Security Policy
 
