@@ -66,12 +66,39 @@ dev = [
     "pyright>=1.1.390",
     "ruff>=0.11.4",
 ]
-test = ["httpx>=0.28.1", "pytest>=8.3.5"]
+test = [
+    "httpx>=0.28.1",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.25.3",
+    "pytest-cov>=6.0.0",
+    "redis>=7.4.0",
+]
 
 
 [tool.pytest.ini_options]
-markers = ["slow: marks tests as slow (deselect with '-m \"not slow\"')"]
-python_files = ["test_*.py", "*_test.py", "tests.py"]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["--strict-markers", "--tb=short"]
+markers = [
+    "unit: isolated unit tests without network or external services",
+    "api: FastAPI route tests with replaced external dependencies",
+    "integration: tests requiring a local service such as PostgreSQL or Valkey",
+    "e2e: end-to-end tests against the containerized application stack",
+    "live: manually triggered tests requiring real API credentials",
+    "slow: tests excluded from the default fast feedback loop",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["app", "evals"]
+omit = ["tests/*", "alembic/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
 
 [tool.black]
 line-length = 119
@@ -125,6 +152,7 @@ convention = "google"
 # Ignore `E402` (import violations) in all `__init__.py` files
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402"]
+"tests/**/*.py" = ["D"]
 
 [tool.pyright]
 include = ["app", "evals"]

@@ -87,6 +87,27 @@ test-embedding:
 	uv run python -m scripts.test_model_connectivity --embedding
 
 # ---------------------------------------------------------------------------
+# Automated tests (all external services are replaced by fakes by default)
+# ---------------------------------------------------------------------------
+test:
+	uv run --group test pytest -m "not integration and not e2e and not live and not slow"
+
+test-unit:
+	uv run --group test pytest -m unit
+
+test-api:
+	uv run --group test pytest -m api
+
+test-integration:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-integration.ps1
+
+test-e2e:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-e2e.ps1
+
+test-coverage:
+	uv run --group test pytest --cov=app --cov=evals --cov-report=term-missing -m "not integration and not e2e and not live and not slow"
+
+# ---------------------------------------------------------------------------
 # Code quality
 # ---------------------------------------------------------------------------
 lint:
@@ -189,6 +210,12 @@ help:
 	@echo "  eval-no-report       Run evals without report"
 	@echo ""
 	@echo "External service connectivity:"
+	@echo "  test                 Run default automated tests without external services"
+	@echo "  test-unit            Run isolated unit tests"
+	@echo "  test-api             Run FastAPI route tests with fake dependencies"
+	@echo "  test-integration     Run PostgreSQL and Valkey tests in a temporary Docker stack"
+	@echo "  test-e2e             Build and smoke-test the API container in a temporary Docker stack"
+	@echo "  test-coverage        Run default tests with branch coverage"
 	@echo "  test-connectivity    Test DeepSeek, NVIDIA embeddings, and mem0/pgvector connectivity"
 	@echo "  test-embedding       Test only NVIDIA nv-embed-v1 embeddings"
 	@echo ""
@@ -219,7 +246,7 @@ help:
 
 .PHONY: install dev staging prod _serve \
         migrate migration migrate-downgrade migrate-history \
-        eval eval-quick eval-no-report test-connectivity test-embedding \
+        eval eval-quick eval-no-report test test-unit test-api test-integration test-e2e test-coverage test-connectivity test-embedding \
         lint format typecheck check pre-commit pre-commit-update \
         docker-build docker-up docker-down docker-logs docker-migrate \
         docker-migrate-downgrade docker-migrate-history \

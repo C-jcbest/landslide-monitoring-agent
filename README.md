@@ -141,6 +141,22 @@ make install
 make docker-up                     # 启动 API + PostgreSQL
 ```
 
+### 自动化测试
+
+默认测试使用替身隔离 LLM、Langfuse、mem0 和外部 API，不需要真实密钥或网络访问：
+
+```bash
+make test                 # 默认离线测试
+make test-unit            # 纯单元测试
+make test-api             # FastAPI 路由测试
+make test-integration     # 临时 Docker PostgreSQL + Valkey 集成测试
+make test-e2e             # 构建并验证临时 API 容器的健康检查
+make test-coverage        # 分支覆盖率报告
+make test-connectivity    # 受控的真实模型/embedding/mem0 连通性检查
+```
+
+`test-connectivity` 和 `test-embedding` 依赖真实凭据，只应在预发布环境或由人工显式触发；它们不会由默认 CI 执行。
+
 打开 [http://localhost:8000/docs](http://localhost:8000/docs) 查看交互式 API。
 
 > 无 Docker 的本地开发，请参见 [docs/getting-started.md](docs/getting-started.md)。

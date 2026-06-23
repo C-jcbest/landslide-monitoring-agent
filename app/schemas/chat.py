@@ -4,6 +4,7 @@ import re
 from typing import (
     List,
     Literal,
+    Optional,
 )
 
 from pydantic import (
@@ -75,6 +76,9 @@ class ChatResponse(BaseResponse):
     """
 
     messages: List[Message] = Field(..., description="List of messages in the conversation")
+    is_interrupted: bool = Field(default=False, description="Whether the conversation is currently interrupted/waiting for human input")
+    interrupt_question: Optional[str] = Field(default=None, description="The question/prompt from the active interrupt")
+
 
 
 class StreamResponse(BaseResponse):

@@ -201,6 +201,9 @@ class Settings:
             "messages": ["50 per minute"],
             "register": ["10 per hour"],
             "login": ["20 per minute"],
+            "session": ["30 per minute"],
+            "sessions": ["30 per minute"],
+            "api_health": ["20 per minute"],
             "root": ["10 per minute"],
             "health": ["20 per minute"],
         }

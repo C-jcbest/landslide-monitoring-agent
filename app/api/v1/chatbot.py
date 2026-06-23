@@ -13,6 +13,7 @@ from fastapi import (
     Request,
 )
 from fastapi.responses import StreamingResponse
+from langchain_core.runnables.config import RunnableConfig
 
 from app.api.v1.auth import get_current_session
 from app.core.config import settings
@@ -30,6 +31,20 @@ from app.services.session_naming import maybe_name_session
 
 router = APIRouter()
 agent = LangGraphAgent()
+
+
+async def _get_interrupt_details(session_id: str) -> tuple[bool, str | None]:
+    """Return the active human-in-the-loop interrupt state for a session."""
+    graph = await agent._get_graph()
+    config: RunnableConfig = {"configurable": {"thread_id": session_id}}
+    state = await graph.aget_state(config)
+    if not state.next:
+        return False, None
+
+    for task in state.tasks:
+        if task.interrupts:
+            return True, str(task.interrupts[0].value)
+    return True, None
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -68,10 +83,16 @@ async def chat(
 
         logger.info("chat_request_processed", session_id=session.id)
 
-        return ChatResponse(messages=result)
+        is_interrupted, interrupt_question = await _get_interrupt_details(session.id)
+
+        return ChatResponse(
+            messages=result,
+            is_interrupted=is_interrupted,
+            interrupt_question=interrupt_question,
+        )
     except Exception as e:
         logger.exception("chat_request_failed", session_id=session.id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Unable to process chat request")
 
 
 @router.post("/chat/stream")
@@ -131,7 +152,7 @@ async def chat_stream(
                     session_id=session.id,
                     error=str(e),
                 )
-                error_response = StreamResponse(content=str(e), done=True)
+                error_response = StreamResponse(content="Unable to process chat stream", done=True)
                 yield f"data: {json.dumps(error_response.model_dump(mode='json'))}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
@@ -142,7 +163,7 @@ async def chat_stream(
             session_id=session.id,
             error=str(e),
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Unable to process chat stream")
 
 
 @router.get("/messages", response_model=ChatResponse)
@@ -165,10 +186,16 @@ async def get_session_messages(
     """
     try:
         messages = await agent.get_chat_history(session.id)
-        return ChatResponse(messages=messages)
+        is_interrupted, interrupt_question = await _get_interrupt_details(session.id)
+
+        return ChatResponse(
+            messages=messages,
+            is_interrupted=is_interrupted,
+            interrupt_question=interrupt_question,
+        )
     except Exception as e:
         logger.exception("get_messages_failed", session_id=session.id, error=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Unable to retrieve chat history")
 
 
 @router.delete("/messages")

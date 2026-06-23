@@ -4,10 +4,12 @@ This module sets up the main API router and includes all sub-routers for differe
 endpoints like authentication and chatbot functionality.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from app.api.v1.auth import router as auth_router
 from app.api.v1.chatbot import router as chatbot_router
+from app.core.config import settings
+from app.core.limiter import limiter
 from app.core.logging import logger
 
 api_router = APIRouter()
@@ -18,7 +20,8 @@ api_router.include_router(chatbot_router, prefix="/chatbot", tags=["Chatbot"])
 
 
 @api_router.get("/health")
-async def health_check():
+@limiter.limit(settings.RATE_LIMIT_ENDPOINTS["api_health"][0])
+async def health_check(request: Request):
     """Health check endpoint.
 
     Returns:
