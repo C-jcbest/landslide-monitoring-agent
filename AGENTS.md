@@ -1,5 +1,3 @@
-<div align="right"><a href="./AGENTS.en-US.md">English</a></div>
-
 # AI Agent 开发指南
 
 本文档为在此 LangGraph FastAPI Agent 项目上工作的 AI Agent 提供基本准则。

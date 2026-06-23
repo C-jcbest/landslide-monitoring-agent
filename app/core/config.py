@@ -125,9 +125,7 @@ class Settings:
         # Application Settings
         self.PROJECT_NAME = os.getenv("PROJECT_NAME", "FastAPI LangGraph Template")
         self.VERSION = os.getenv("VERSION", "1.0.0")
-        self.DESCRIPTION = os.getenv(
-            "DESCRIPTION", "A production-ready FastAPI template with LangGraph and Langfuse integration"
-        )
+        self.DESCRIPTION = os.getenv("DESCRIPTION", "地质监测滑坡预警智能体服务平台")
         self.API_V1_STR = os.getenv("API_V1_STR", "/api/v1")
         self.DEBUG = os.getenv("DEBUG", "false").lower() in ("true", "1", "t", "yes")
 
@@ -146,8 +144,9 @@ class Settings:
         self.LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
 
         # LangGraph Configuration
-        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-        self.DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "gpt-5-mini")
+        self.DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", os.getenv("OPENAI_API_KEY", ""))
+        self.DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        self.DEFAULT_LLM_MODEL = os.getenv("DEFAULT_LLM_MODEL", "deepseek-v4-flash")
         self.SESSION_NAMING_ENABLED = os.getenv("SESSION_NAMING_ENABLED", "true").lower() == "true"
         self.DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", "0.2"))
         self.MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2000"))
@@ -155,9 +154,11 @@ class Settings:
         self.LLM_TOTAL_TIMEOUT = int(os.getenv("LLM_TOTAL_TIMEOUT", "60"))
 
         # Long term memory Configuration
-        self.LONG_TERM_MEMORY_MODEL = os.getenv("LONG_TERM_MEMORY_MODEL", "gpt-5-nano")
-        self.LONG_TERM_MEMORY_EMBEDDER_MODEL = os.getenv("LONG_TERM_MEMORY_EMBEDDER_MODEL", "text-embedding-3-small")
-        self.LONG_TERM_MEMORY_COLLECTION_NAME = os.getenv("LONG_TERM_MEMORY_COLLECTION_NAME", "longterm_memory")
+        self.LONG_TERM_MEMORY_MODEL = os.getenv("LONG_TERM_MEMORY_MODEL", "deepseek-v4-flash")
+        self.NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
+        self.LONG_TERM_MEMORY_EMBEDDER_MODEL = os.getenv("LONG_TERM_MEMORY_EMBEDDER_MODEL", "nvidia/nv-embed-v1")
+        self.LONG_TERM_MEMORY_EMBEDDER_DIMENSIONS = int(os.getenv("LONG_TERM_MEMORY_EMBEDDER_DIMENSIONS", "4096"))
+        self.LONG_TERM_MEMORY_COLLECTION_NAME = os.getenv("LONG_TERM_MEMORY_COLLECTION_NAME", "longterm_memory_nv_embed_v1")
         # JWT Configuration
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
         self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -213,9 +214,9 @@ class Settings:
                 self.RATE_LIMIT_ENDPOINTS[endpoint] = value
 
         # Evaluation Configuration
-        self.EVALUATION_LLM = os.getenv("EVALUATION_LLM", "gpt-5")
-        self.EVALUATION_BASE_URL = os.getenv("EVALUATION_BASE_URL", "https://api.openai.com/v1")
-        self.EVALUATION_API_KEY = os.getenv("EVALUATION_API_KEY", self.OPENAI_API_KEY)
+        self.EVALUATION_LLM = os.getenv("EVALUATION_LLM", "deepseek-v4-flash")
+        self.EVALUATION_BASE_URL = os.getenv("EVALUATION_BASE_URL", self.DEEPSEEK_BASE_URL)
+        self.EVALUATION_API_KEY = os.getenv("EVALUATION_API_KEY", self.DEEPSEEK_API_KEY)
         self.EVALUATION_SLEEP_TIME = int(os.getenv("EVALUATION_SLEEP_TIME", "10"))
 
         # Apply environment-specific settings

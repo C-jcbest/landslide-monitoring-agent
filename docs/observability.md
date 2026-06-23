@@ -1,5 +1,3 @@
-<div align="right"><a href="./observability.en-US.md">English</a></div>
-
 # 可观测性
 
 ## 概述
@@ -51,6 +49,7 @@ LANGFUSE_TRACING_ENABLED=false
 
 - **开发**：彩色控制台输出
 - **生产**：JSON（传送到您的日志收集器）
+- **JSONL 文件**：始终写入结构化 JSON，避免将控制台颜色控制码序列化到日志文件
 
 每条日志行自动携带 `request_id`、`session_id` 和 `user_id`（可用时）— 由 `LoggingContextMiddleware` 绑定。
 

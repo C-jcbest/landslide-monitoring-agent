@@ -1,5 +1,3 @@
-<div align="right"><a href="./evaluation.en-US.md">English</a></div>
-
 # 评估
 
 该模板包含一个基于指标的评估框架，从 Langfuse 获取追踪，使用 LLM 评判进行评分，并生成 JSON 报告。
@@ -77,6 +75,7 @@ Return "pass" if... Return "fail" if...
 评估器使用单独的 LLM 配置，因此您可以使用不同的（更便宜的）模型进行评判：
 
 ```bash
-EVALUATION_LLM=gpt-5
-EVALUATION_API_KEY=...   # 如果未设置，默认为 OPENAI_API_KEY
+EVALUATION_LLM=deepseek-v4-flash
+EVALUATION_BASE_URL=https://api.deepseek.com
+EVALUATION_API_KEY=...   # 如果未设置，默认为 DEEPSEEK_API_KEY
 ```

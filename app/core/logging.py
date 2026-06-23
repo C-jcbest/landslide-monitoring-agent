@@ -5,7 +5,6 @@ with environment-specific formatters and handlers. It supports both
 console-friendly development logging and JSON-formatted production logging.
 """
 
-import json
 import logging
 import sys
 from contextvars import ContextVar
@@ -120,22 +119,8 @@ class JsonlFileHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         """Emit a record to the JSONL file."""
         try:
-            log_entry = {
-                "timestamp": datetime.fromtimestamp(record.created).isoformat(),
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "module": record.module,
-                "function": record.funcName,
-                "filename": record.pathname,
-                "line": record.lineno,
-                "environment": settings.ENVIRONMENT.value,
-            }
-            extra = getattr(record, "extra", None)
-            if isinstance(extra, dict):
-                log_entry.update(extra)
-
             with open(self.file_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry) + "\n")
+                f.write(f"{self.format(record)}\n")
         except Exception:
             self.handleError(record)
 
@@ -213,37 +198,39 @@ def setup_logging() -> None:
         include_file_info=settings.ENVIRONMENT in [Environment.DEVELOPMENT, Environment.TEST]
     )
 
-    # Configure standard logging
+    file_handler.setFormatter(
+        structlog.stdlib.ProcessorFormatter(
+            processor=structlog.processors.JSONRenderer(),
+        )
+    )
+
+    console_renderer: Any
+    if settings.LOG_FORMAT == "console":
+        console_renderer = structlog.dev.ConsoleRenderer()
+    else:
+        console_renderer = structlog.processors.JSONRenderer()
+    console_handler.setFormatter(
+        structlog.stdlib.ProcessorFormatter(processor=console_renderer)
+    )
+
+    # Configure standard logging.  Each handler has its own renderer: JSONL for
+    # files and console/JSON for stdout.  This keeps a console-rendered string
+    # (including ANSI color codes) from being serialized into the JSONL message.
     logging.basicConfig(
-        format="%(message)s",
         level=log_level,
         handlers=[file_handler, console_handler],
     )
 
     # Configure structlog based on environment
-    if settings.LOG_FORMAT == "console":
-        # Development-friendly console logging
-        structlog.configure(
-            processors=[
-                *shared_processors,
-                # Use ConsoleRenderer for pretty output to the console
-                structlog.dev.ConsoleRenderer(),
-            ],
-            wrapper_class=structlog.stdlib.BoundLogger,
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            cache_logger_on_first_use=True,
-        )
-    else:
-        # Production JSON logging
-        structlog.configure(
-            processors=[
-                *shared_processors,
-                structlog.processors.JSONRenderer(),
-            ],
-            wrapper_class=structlog.stdlib.BoundLogger,
-            logger_factory=structlog.stdlib.LoggerFactory(),
-            cache_logger_on_first_use=True,
-        )
+    structlog.configure(
+        processors=[
+            *shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
 
 # Initialize logging

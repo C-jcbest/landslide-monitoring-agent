@@ -5,7 +5,7 @@ On the first message of a new session this module:
      across concurrent requests and multiple uvicorn workers).
   2. Writes a placeholder name derived from the user's message so the session
      always has a sensible name even if the LLM call later fails.
-  3. Fires a background asyncio task that calls a fast nano model with
+  3. Fires a background asyncio task that calls the configured LLM with
      structured output to generate a proper title and overwrites the placeholder.
 """
 
@@ -21,6 +21,7 @@ from sqlmodel import (
 from app.core.logging import logger
 from app.core.metrics import session_names_generated_total
 from app.core.prompts import SESSION_TITLE_PROMPT
+from app.core.config import settings
 from app.models.session import Session as ChatSession
 from app.schemas.chat import SessionTitle
 from app.services.database import database_service
@@ -60,9 +61,8 @@ async def _persist_session_name(session_id: str, user_message: str) -> None:
                 SystemMessage(content=SESSION_TITLE_PROMPT),
                 HumanMessage(content=user_message[:500]),
             ],
-            model_name="gpt-5.4-nano",
+            model_name=settings.DEFAULT_LLM_MODEL,
             response_format=SessionTitle,
-            reasoning={"effort": "low"},
             max_tokens=32,
             temperature=0.3,
         )

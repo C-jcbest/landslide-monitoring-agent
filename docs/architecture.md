@@ -1,5 +1,3 @@
-<div align="right"><a href="./architecture.en-US.md">English</a></div>
-
 # 架构
 
 ## 系统概述

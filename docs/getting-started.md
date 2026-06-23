@@ -1,5 +1,3 @@
-<div align="right"><a href="./getting-started.en-US.md">English</a></div>
-
 # 快速开始
 
 ## 前置要求
@@ -7,7 +5,8 @@
 - Python 3.13+
 - uv — `pip install uv`
 - Docker + Docker Compose（本地开发推荐）
-- OpenAI API 密钥
+- DeepSeek API 密钥
+- NVIDIA API 密钥（用于 NV-Embed-v1 嵌入）
 - Langfuse 账户（可选 — 设置 `LANGFUSE_TRACING_ENABLED=false` 跳过）
 
 ## 选项 A：Docker（推荐）
@@ -20,7 +19,7 @@ cd my-agent
 
 # 复制并填写您的环境文件
 cp .env.example .env.development
-# 必需：OPENAI_API_KEY, JWT_SECRET_KEY
+# 必需：DEEPSEEK_API_KEY, NVIDIA_API_KEY, JWT_SECRET_KEY
 # 可选：LANGFUSE_* 密钥（或设置 LANGFUSE_TRACING_ENABLED=false）
 
 make install       # 安装 Python 依赖 + pre-commit hooks
@@ -37,7 +36,7 @@ git clone <repo-url> my-agent
 cd my-agent
 
 cp .env.example .env.development
-# 填写：OPENAI_API_KEY, JWT_SECRET_KEY, POSTGRES_*（指向您的数据库）
+# 填写：DEEPSEEK_API_KEY, NVIDIA_API_KEY, JWT_SECRET_KEY, POSTGRES_*（指向您的数据库）
 
 make install       # 安装依赖 + pre-commit hooks
 make migrate       # 通过 Alembic 创建表

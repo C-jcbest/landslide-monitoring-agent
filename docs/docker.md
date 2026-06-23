@@ -1,5 +1,3 @@
-<div align="right"><a href="./docker.en-US.md">English</a></div>
-
 # Docker
 
 ## 服务

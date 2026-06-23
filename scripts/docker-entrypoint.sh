@@ -49,7 +49,7 @@ else
 fi
 
 # Check required sensitive environment variables
-required_vars=("JWT_SECRET_KEY" "OPENAI_API_KEY")
+required_vars=("JWT_SECRET_KEY")
 missing_vars=()
 
 for var in "${required_vars[@]}"; do
@@ -57,6 +57,10 @@ for var in "${required_vars[@]}"; do
         missing_vars+=("$var")
     fi
 done
+
+if [[ -z "${DEEPSEEK_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" ]]; then
+    missing_vars+=("DEEPSEEK_API_KEY (or legacy OPENAI_API_KEY)")
+fi
 
 if [[ ${#missing_vars[@]} -gt 0 ]]; then
     echo "ERROR: The following required environment variables are missing:"

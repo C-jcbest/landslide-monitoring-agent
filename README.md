@@ -1,5 +1,3 @@
-<div align="right"><a href="./README.en-US.md">English</a></div>
-
 # FastAPI LangGraph Agent 模板
 
 一个生产就绪的 AI Agent 后端构建模板，使用 FastAPI 和 LangGraph。处理复杂部分 — 有状态对话、长期记忆、工具调用、可观测性、限流、认证 — 让您专注于 Agent 逻辑。

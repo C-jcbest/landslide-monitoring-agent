@@ -1,5 +1,3 @@
-<div align="right"><a href="./configuration.en-US.md">English</a></div>
-
 # 配置
 
 所有配置都从环境变量读取。使用 `.env.development`、`.env.staging` 或 `.env.production` — 应用根据 `APP_ENV` 变量加载相应的文件。
@@ -29,8 +27,9 @@ cp .env.example .env.development
 
 | 变量 | 默认值 | 必需 | 描述 |
 | --- | --- | --- | --- |
-| `OPENAI_API_KEY` | — | 是 | OpenAI API 密钥 |
-| `DEFAULT_LLM_MODEL` | `gpt-5-mini` | 否 | 起始模型 — 参见 [LLM 服务](llm-service.md) 了解降级顺序 |
+| `DEEPSEEK_API_KEY` | — | 是 | DeepSeek API 密钥；暂未设置时兼容读取旧的 `OPENAI_API_KEY` |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | 否 | DeepSeek 的 OpenAI 兼容 API 地址 |
+| `DEFAULT_LLM_MODEL` | `deepseek-v4-flash` | 否 | 起始模型 — 参见 [LLM 服务](llm-service.md) 了解降级顺序 |
 | `DEFAULT_LLM_TEMPERATURE` | `0.2` | 否 | 聊天补全的温度 |
 | `MAX_TOKENS` | `2000` | 否 | 每次 LLM 响应的最大令牌数 |
 | `MAX_LLM_CALL_RETRIES` | `3` | 否 | 切换到降级前每个模型的重试次数 |
@@ -43,9 +42,11 @@ cp .env.example .env.development
 
 | 变量 | 默认值 | 描述 |
 | --- | --- | --- |
-| `LONG_TERM_MEMORY_COLLECTION_NAME` | `longterm_memory` | pgvector 集合名称 |
-| `LONG_TERM_MEMORY_MODEL` | `gpt-5-nano` | mem0 用于提取记忆的 LLM |
-| `LONG_TERM_MEMORY_EMBEDDER_MODEL` | `text-embedding-3-small` | 语义搜索的嵌入模型 |
+| `LONG_TERM_MEMORY_COLLECTION_NAME` | `longterm_memory_nv_embed_v1` | pgvector 集合名称 |
+| `LONG_TERM_MEMORY_MODEL` | `deepseek-v4-flash` | mem0 用于提取记忆的 DeepSeek 模型 |
+| `LONG_TERM_MEMORY_EMBEDDER_MODEL` | `nvidia/nv-embed-v1` | 通过 LangChain NVIDIA AI Endpoints 使用的嵌入模型 |
+| `LONG_TERM_MEMORY_EMBEDDER_DIMENSIONS` | `4096` | NV-Embed-v1 输出维度，必须与 pgvector 集合匹配 |
+| `NVIDIA_API_KEY` | — | NVIDIA AI Endpoints 的访问密钥 |
 
 ---
 

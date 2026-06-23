@@ -1,6 +1,11 @@
 """Long-term memory service using mem0 and pgvector with optional cache layer."""
 
+from typing import Any
+
+from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+from langchain_openai import ChatOpenAI
 from mem0 import AsyncMemory
+from pydantic import SecretStr
 
 from app.core.cache import (
     cache_key,
@@ -19,26 +24,43 @@ class MemoryService:
 
     async def _get_memory(self) -> AsyncMemory:
         if self._memory is None:
+            deepseek_llm_config: dict[str, Any] = {
+                "model": settings.LONG_TERM_MEMORY_MODEL,
+                "api_key": SecretStr(settings.DEEPSEEK_API_KEY),
+                "base_url": settings.DEEPSEEK_BASE_URL,
+                "temperature": settings.DEFAULT_LLM_TEMPERATURE,
+                "max_tokens": settings.MAX_TOKENS,
+            }
             self._memory = await AsyncMemory.from_config(
                 config_dict={
                     "vector_store": {
                         "provider": "pgvector",
                         "config": {
                             "collection_name": settings.LONG_TERM_MEMORY_COLLECTION_NAME,
+                            "embedding_model_dims": settings.LONG_TERM_MEMORY_EMBEDDER_DIMENSIONS,
                             "dbname": settings.POSTGRES_DB,
                             "user": settings.POSTGRES_USER,
                             "password": settings.POSTGRES_PASSWORD,
                             "host": settings.POSTGRES_HOST,
                             "port": settings.POSTGRES_PORT,
+                            # nv-embed-v1 returns 4096 dimensions, while pgvector's
+                            # HNSW index supports at most 2000 dimensions.
+                            "hnsw": False,
                         },
                     },
                     "llm": {
-                        "provider": "openai",
-                        "config": {"model": settings.LONG_TERM_MEMORY_MODEL},
+                        "provider": "langchain",
+                        "config": {"model": ChatOpenAI(**deepseek_llm_config)},
                     },
                     "embedder": {
-                        "provider": "openai",
-                        "config": {"model": settings.LONG_TERM_MEMORY_EMBEDDER_MODEL},
+                        "provider": "langchain",
+                        "config": {
+                            "model": NVIDIAEmbeddings(
+                                model=settings.LONG_TERM_MEMORY_EMBEDDER_MODEL,
+                                api_key=settings.NVIDIA_API_KEY,
+                                truncate="NONE",
+                            )
+                        },
                     },
                 }
             )

@@ -1,5 +1,3 @@
-<div align="right"><a href="./SECURITY.en-US.md">English</a></div>
-
 # 安全策略
 
 ## 支持的版本

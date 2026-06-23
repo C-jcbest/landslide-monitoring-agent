@@ -78,6 +78,15 @@ eval-no-report:
 	@$(call run_with_env,python -m evals.main --no-report)
 
 # ---------------------------------------------------------------------------
+# External service connectivity
+# ---------------------------------------------------------------------------
+test-connectivity:
+	uv run python -m scripts.test_model_connectivity
+
+test-embedding:
+	uv run python -m scripts.test_model_connectivity --embedding
+
+# ---------------------------------------------------------------------------
 # Code quality
 # ---------------------------------------------------------------------------
 lint:
@@ -121,17 +130,17 @@ docker-logs:
 # Requires the stack to be up first (make docker-up).
 docker-migrate:
 	$(call load_env_file)
-	@APP_ENV=$(ENV) $(DOCKER_COMPOSE) --env-file .env.$(ENV) exec -T app /app/.venv/bin/alembic upgrade head
+	@APP_ENV=$(ENV) $(DOCKER_COMPOSE) --env-file .env.$(ENV) exec -T app sh -c 'exec /app/.venv/bin/alembic upgrade head'
 
 # Roll back the last migration inside the running app container.
 docker-migrate-downgrade:
 	$(call load_env_file)
-	@APP_ENV=$(ENV) $(DOCKER_COMPOSE) --env-file .env.$(ENV) exec -T app /app/.venv/bin/alembic downgrade -1
+	@APP_ENV=$(ENV) $(DOCKER_COMPOSE) --env-file .env.$(ENV) exec -T app sh -c 'exec /app/.venv/bin/alembic downgrade -1'
 
 # Show migration history inside the running app container.
 docker-migrate-history:
 	$(call load_env_file)
-	@APP_ENV=$(ENV) $(DOCKER_COMPOSE) --env-file .env.$(ENV) exec -T app /app/.venv/bin/alembic history --verbose
+	@APP_ENV=$(ENV) $(DOCKER_COMPOSE) --env-file .env.$(ENV) exec -T app sh -c 'exec /app/.venv/bin/alembic history --verbose'
 
 # ---------------------------------------------------------------------------
 # Docker — full stack (API + DB + Prometheus + Grafana)
@@ -179,6 +188,10 @@ help:
 	@echo "  eval-quick           Run evals (default settings)"
 	@echo "  eval-no-report       Run evals without report"
 	@echo ""
+	@echo "External service connectivity:"
+	@echo "  test-connectivity    Test DeepSeek, NVIDIA embeddings, and mem0/pgvector connectivity"
+	@echo "  test-embedding       Test only NVIDIA nv-embed-v1 embeddings"
+	@echo ""
 	@echo "Code quality:"
 	@echo "  lint                 Ruff lint check"
 	@echo "  format               Ruff format"
@@ -206,7 +219,7 @@ help:
 
 .PHONY: install dev staging prod _serve \
         migrate migration migrate-downgrade migrate-history \
-        eval eval-quick eval-no-report \
+        eval eval-quick eval-no-report test-connectivity test-embedding \
         lint format typecheck check pre-commit pre-commit-update \
         docker-build docker-up docker-down docker-logs docker-migrate \
         docker-migrate-downgrade docker-migrate-history \

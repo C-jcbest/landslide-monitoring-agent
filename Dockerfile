@@ -17,6 +17,7 @@ ENV APP_ENV=${APP_ENV} \
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
+    curl \
     libpq-dev \
     && pip install --upgrade pip \
     && pip install uv \

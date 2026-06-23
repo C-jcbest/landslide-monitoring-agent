@@ -1,5 +1,3 @@
-<div align="right"><a href="./llm-service.en-US.md">English</a></div>
-
 # LLM 服务
 
 ## 概述
@@ -17,10 +15,8 @@ LLM 服务（`app/services/llm/`）处理所有语言模型调用，具有自动
 
 | 名称 | 模型 | 说明 |
 | --- | --- | --- |
-| `gpt-5-mini` | gpt-5-mini | 默认。低推理成本。 |
-| `gpt-5.4` | gpt-5 | 中等推理成本。 |
-| `gpt-5.4-nano` | gpt-5.4-nano | 快速，低推理成本。 |
-| `gpt-5` | gpt-5 | 完整模型，生产调优采样。 |
+| `deepseek-v4-flash` | deepseek-v4-flash | 默认模型，使用 DeepSeek OpenAI 兼容 API。 |
+| `deepseek-v4-pro` | deepseek-v4-pro | 默认模型失败后的循环降级目标。 |
 
 在 `.env` 中设置 `DEFAULT_LLM_MODEL` 以选择起始模型。
 
@@ -81,7 +77,7 @@ from app.schemas.my_schema import MySchema
 
 result: MySchema = await llm_service.call(
     messages,
-    model_name="gpt-5.4-nano",   # 可选 — 省略时使用当前默认值
+    model_name="deepseek-v4-flash",   # 可选 — 省略时使用当前默认值
     response_format=MySchema,
     temperature=0.2,
 )
@@ -94,10 +90,11 @@ result: MySchema = await llm_service.call(
 ```python
 # app/services/llm/registry.py — LLMRegistry.LLMS
 {
-    "name": "gpt-5.4",
+    "name": "deepseek-v4-pro",
     "llm": ChatOpenAI(
-        model="gpt-5.4",
-        api_key=settings.OPENAI_API_KEY,
+        model="deepseek-v4-pro",
+        api_key=settings.DEEPSEEK_API_KEY,
+        base_url=settings.DEEPSEEK_BASE_URL,
         max_tokens=settings.MAX_TOKENS,
     ),
 },
