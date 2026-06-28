@@ -9,5 +9,6 @@ from langchain_core.tools.base import BaseTool
 
 from .ask_human import ask_human
 from .duckduckgo_search import duckduckgo_search_tool
+from .open_meteo_weather import open_meteo_weather_tool
 
-tools: list[BaseTool] = [duckduckgo_search_tool, ask_human]
+tools: list[BaseTool] = [duckduckgo_search_tool, open_meteo_weather_tool, ask_human]
