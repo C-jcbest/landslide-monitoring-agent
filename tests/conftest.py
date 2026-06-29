@@ -12,11 +12,11 @@ from httpx import ASGITransport, AsyncClient
 os.environ["APP_ENV"] = "test"
 os.environ["LANGFUSE_TRACING_ENABLED"] = "false"
 os.environ["SESSION_NAMING_ENABLED"] = "false"
-os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-not-for-production"
+os.environ["JWT_SECRET_KEY"] = "test-jwt-secret-key-not-for-production"  # pragma: allowlist secret
 os.environ["DEEPSEEK_API_KEY"] = ""
 os.environ["NVIDIA_API_KEY"] = ""
 
-from app.api.v1.auth import get_current_session, get_current_user
+from app.api.v1.auth import get_current_session, get_current_user, get_current_user_from_any_token
 from app.main import app
 from app.models.session import Session
 from app.models.user import User
@@ -44,6 +44,7 @@ async def client(test_user: User, test_session: Session) -> AsyncGenerator[Async
     """Provide a FastAPI client with authentication dependencies replaced."""
     app.dependency_overrides[get_current_user] = lambda: test_user
     app.dependency_overrides[get_current_session] = lambda: test_session
+    app.dependency_overrides[get_current_user_from_any_token] = lambda: test_user
     transport = ASGITransport(app=app)
 
     async with AsyncClient(transport=transport, base_url="http://testserver") as async_client:

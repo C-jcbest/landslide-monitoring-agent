@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SessionInfo, getStoredUsername } from '../services/api';
-import { Mountain, Plus, MessageSquare, Trash2, Edit3, Check, X, LogOut, User, Settings, FileText, CreditCard, PanelLeftClose } from 'lucide-react';
+import { Mountain, Plus, MessageSquare, Trash2, Edit3, Check, X, LogOut, User, Settings, FileText, CreditCard, PanelLeftClose, Key } from 'lucide-react';
 
 interface SidebarProps {
   sessions: SessionInfo[];
@@ -15,6 +15,7 @@ interface SidebarProps {
   onOpenSettings: () => void;
   onOpenReports: () => void;
   onOpenSubscription: () => void;
+  onOpenBeidouCredentials: () => void;
   onToggleSidebar: () => void;
 }
 
@@ -31,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   onOpenReports,
   onOpenSubscription,
+  onOpenBeidouCredentials,
   onToggleSidebar,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -234,6 +236,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Settings className="w-4 h-4 text-neutral-400" />
               <span>设置</span>
+            </button>
+            <button
+              onClick={() => {
+                setShowDropdown(false);
+                onOpenBeidouCredentials();
+              }}
+              className="flex items-center gap-2.5 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors text-left w-full"
+            >
+              <Key className="w-4 h-4 text-neutral-400" />
+              <span>北斗凭证</span>
             </button>
             <button
               onClick={() => {

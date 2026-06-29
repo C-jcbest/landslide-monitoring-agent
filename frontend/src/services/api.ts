@@ -245,3 +245,59 @@ export async function streamChat(
     reader?.releaseLock();
   }
 }
+
+// Beidou Credentials API Types
+export interface BeidouCredentialStatusResponse {
+  bound: boolean;
+  username: string | null;
+  last_verified_at: string | null;
+  session_expires_at: string | null;
+}
+
+export interface BeidouCredentialUpsertRequest {
+  username: string;
+  password: string;
+}
+
+// Beidou Credentials API Functions
+export async function getBeidouCredentialStatus(token: string): Promise<BeidouCredentialStatusResponse> {
+  const response = await fetch('/api/v1/beidou/credentials/status', {
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: '获取北斗凭据状态失败' }));
+    throw new Error(errorData.detail || '获取北斗凭据状态失败');
+  }
+  return response.json();
+}
+
+export async function bindBeidouCredential(
+  token: string,
+  payload: BeidouCredentialUpsertRequest
+): Promise<BeidouCredentialStatusResponse> {
+  const response = await fetch('/api/v1/beidou/credentials', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: '绑定北斗凭据失败' }));
+    throw new Error(errorData.detail || '绑定北斗凭据失败');
+  }
+  return response.json();
+}
+
+export async function unbindBeidouCredential(token: string): Promise<BeidouCredentialStatusResponse> {
+  const response = await fetch('/api/v1/beidou/credentials', {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: '解绑北斗凭据失败' }));
+    throw new Error(errorData.detail || '解绑北斗凭据失败');
+  }
+  return response.json();
+}
