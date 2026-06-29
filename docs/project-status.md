@@ -23,3 +23,19 @@
 - Record: 发现文档与代码实现不一致时，代理不应默认在同一轮自动修正文档或代码；应先报告差异、影响范围和可选处理路径，由用户决定下一步。
 - Prevention: 后续审查或实现中遇到 docs/code drift，先暂停相关同步动作并询问用户确认，除非用户已明确授权按某个方向修改。
 - Links: `AGENTS.md`
+
+### 2026-06-29 - 测试账号渐进式披露
+
+- Type: Constraint
+- Area: docs | tests | agent
+- Record: 测试账号等敏感测试资料应通过测试说明文件渐进式披露；执行测试时先读对应 `docs/tests/{编号}-{功能名}.md`，只有涉及认证状态时才读取 `docs/tests/test-accounts.md`。
+- Prevention: 后续验收、提交信息和评审结论不要重复暴露测试账号明文；需要说明账号来源时引用 `docs/tests/test-accounts.md`，不要把测试账号硬编码进业务代码或生产配置。
+- Links: `AGENTS.md`、`docs/tests/test-accounts.md`
+
+### 2026-06-29 - 功能测试与 LLM 评估分离
+
+- Type: Correction
+- Area: docs | tests | agent
+- Record: 功能测试/前端验收与 LLM 输出评估是两类不同测试；测试账号只服务于功能验收和集成测试，不属于 `evals/` 的 LLM 输出质量评估流程。
+- Prevention: 功能测试失败时优先排查代码、测试数据、服务、数据库和环境配置；只有 LLM 输出质量、推理格式、工具调用行为或评估指标不达标时，才考虑优化系统提示词、评估提示词或 LangGraph agent prompt。
+- Links: `AGENTS.md`、`docs/tests/`、`evals/`
