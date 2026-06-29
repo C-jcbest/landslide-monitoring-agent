@@ -41,7 +41,7 @@ def _is_retryable_beidou_error(exception: BaseException) -> bool:
 class BeidouClient:
     """Restricted client for fixed Beidou API endpoints."""
 
-    def __init__(self, base_url: str, *, timeout_seconds: int) -> None:
+    def __init__(self, base_url: str, *, timeout_seconds: float) -> None:
         """Initialize the client with a fixed API base URL."""
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds

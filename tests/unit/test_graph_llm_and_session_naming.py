@@ -8,7 +8,6 @@ from langchain_core.messages import AIMessage
 from openai import OpenAIError
 
 from app.core.langgraph.graph import LangGraphAgent
-from app.schemas.graph import GraphState
 from app.services.llm.registry import LLMRegistry
 from app.services.llm.service import LLMService
 from app.services import session_naming
@@ -80,27 +79,21 @@ def test_prepare_messages_adds_system_prompt_and_keeps_latest_user_message() -> 
     assert prepared[-1].content == "Hello"
 
 
-async def test_graph_tool_node_returns_all_tool_results() -> None:
-    """Multiple requested tools are executed and converted to tool messages."""
+async def test_chat_internal_tool_runner_returns_all_tool_results() -> None:
+    """Multiple requested read-only tools are executed inside the Chat node."""
     agent = LangGraphAgent()
     first_tool = FakeTool("first result")
     second_tool = FakeTool("second result")
     agent.tools_by_name = {"first": first_tool, "second": second_tool}
-    state = GraphState(
-        messages=[
-            AIMessage(
-                content="",
-                tool_calls=[
-                    {"name": "first", "args": {"query": "a"}, "id": "call-1"},
-                    {"name": "second", "args": {"query": "b"}, "id": "call-2"},
-                ],
-            )
+
+    messages = await agent._run_tool_calls(  # pyright: ignore[reportPrivateUsage]
+        [
+            {"name": "first", "args": {"query": "a"}, "id": "call-1"},
+            {"name": "second", "args": {"query": "b"}, "id": "call-2"},
         ]
     )
 
-    command = await agent._tool_call(state)  # pyright: ignore[reportPrivateUsage]
-
-    assert [message.content for message in command.update["messages"]] == ["first result", "second result"]
+    assert [message.content for message in messages] == ["first result", "second result"]
     assert first_tool.calls == [{"query": "a"}]
     assert second_tool.calls == [{"query": "b"}]
 
