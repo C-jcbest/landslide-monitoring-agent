@@ -3,6 +3,7 @@ import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { Modal } from './components/Modal';
+import { BeidouCredentialsModal } from './components/BeidouCredentialsModal';
 import {
   SessionInfo,
   Message,
@@ -54,7 +55,7 @@ export const App: React.FC = () => {
   const [streamingText, setStreamingText] = useState('');
   const [isNewSessionDraft, setIsNewSessionDraft] = useState(false);
   const [toolStatus, setToolStatus] = useState<string | null>(null);
-  const [modalType, setModalType] = useState<'settings' | 'reports' | 'subscription' | 'logout_confirm' | 'delete_confirm' | null>(null);
+  const [modalType, setModalType] = useState<'settings' | 'reports' | 'subscription' | 'logout_confirm' | 'delete_confirm' | 'beidou_credentials' | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<SessionInfo | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const activeSessionRef = useRef<SessionInfo | null>(activeSession);
@@ -457,6 +458,7 @@ export const App: React.FC = () => {
           onOpenSettings={() => setModalType('settings')}
           onOpenReports={() => setModalType('reports')}
           onOpenSubscription={() => setModalType('subscription')}
+          onOpenBeidouCredentials={() => setModalType('beidou_credentials')}
           onToggleSidebar={() => setIsSidebarCollapsed(true)}
         />
       )}
@@ -602,6 +604,13 @@ export const App: React.FC = () => {
           您确定要退出当前地质监测账户，并回到登录认证界面吗？
         </p>
       </Modal>
+
+      {/* Beidou Credentials Modal */}
+      <BeidouCredentialsModal
+        isOpen={modalType === 'beidou_credentials'}
+        onClose={() => setModalType(null)}
+        userToken={userToken}
+      />
     </div>
   );
 };

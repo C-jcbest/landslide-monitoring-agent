@@ -158,7 +158,9 @@ class Settings:
         self.NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
         self.LONG_TERM_MEMORY_EMBEDDER_MODEL = os.getenv("LONG_TERM_MEMORY_EMBEDDER_MODEL", "nvidia/nv-embed-v1")
         self.LONG_TERM_MEMORY_EMBEDDER_DIMENSIONS = int(os.getenv("LONG_TERM_MEMORY_EMBEDDER_DIMENSIONS", "4096"))
-        self.LONG_TERM_MEMORY_COLLECTION_NAME = os.getenv("LONG_TERM_MEMORY_COLLECTION_NAME", "longterm_memory_nv_embed_v1")
+        self.LONG_TERM_MEMORY_COLLECTION_NAME = os.getenv(
+            "LONG_TERM_MEMORY_COLLECTION_NAME", "longterm_memory_nv_embed_v1"
+        )
         # JWT Configuration
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
         self.JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -191,6 +193,12 @@ class Settings:
         self.VALKEY_MAX_CONNECTIONS = int(os.getenv("VALKEY_MAX_CONNECTIONS", "20"))
         self.CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "60"))
 
+        # Beidou Monitoring Platform Configuration
+        self.BEIDOU_API_BASE_URL = os.getenv("BEIDOU_API_BASE_URL", "http://39.96.80.62/bdjc-api/v2/API")
+        self.BEIDOU_CREDENTIAL_ENCRYPTION_KEY = os.getenv("BEIDOU_CREDENTIAL_ENCRYPTION_KEY", "")
+        self.BEIDOU_API_TIMEOUT_SECONDS = int(os.getenv("BEIDOU_API_TIMEOUT_SECONDS", "10"))
+        self.BEIDOU_SESSION_TTL_SECONDS = int(os.getenv("BEIDOU_SESSION_TTL_SECONDS", "28800"))
+
         # Rate Limiting Configuration
         self.RATE_LIMIT_DEFAULT = parse_list_from_env("RATE_LIMIT_DEFAULT", ["200 per day", "50 per hour"])
 
@@ -199,6 +207,7 @@ class Settings:
             "chat": ["30 per minute"],
             "chat_stream": ["20 per minute"],
             "messages": ["50 per minute"],
+            "beidou_credentials": ["20 per minute"],
             "register": ["10 per hour"],
             "login": ["20 per minute"],
             "session": ["30 per minute"],

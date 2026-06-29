@@ -153,6 +153,61 @@ async def get_current_session(
         )
 
 
+async def get_current_user_from_any_token(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    """Resolve the current user from either a user token or a session token."""
+    try:
+        token = sanitize_string(credentials.credentials)
+        subject = verify_token(token)
+        if subject is None:
+            logger.error("token_subject_not_found", token_part=token[:10] + "...")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid authentication credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        try:
+            user_id = int(subject)
+        except ValueError:
+            user_id = None
+
+        if user_id is not None:
+            user = await db_service.get_user(user_id)
+            if user is not None:
+                bind_context(user_id=user.id)
+                return user
+
+        session_id = sanitize_string(subject)
+        session = await db_service.get_session(session_id)
+        if session is None:
+            logger.error("user_or_session_not_found", subject=subject)
+            raise HTTPException(
+                status_code=404,
+                detail="User or session not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        user = await db_service.get_user(session.user_id)
+        if user is None:
+            logger.error("session_user_not_found", session_id=session.id, user_id=session.user_id)
+            raise HTTPException(
+                status_code=404,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        bind_context(user_id=user.id)
+        return user
+    except ValueError as ve:
+        logger.exception("token_validation_failed", error=str(ve))
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid token format",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
 @router.post("/register", response_model=UserResponse)
 @limiter.limit(settings.RATE_LIMIT_ENDPOINTS["register"][0])
 async def register_user(request: Request, user_data: UserCreate):
