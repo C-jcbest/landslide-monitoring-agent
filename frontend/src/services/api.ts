@@ -27,6 +27,20 @@ export interface UserResponse {
   };
 }
 
+export interface StreamEvent {
+  event?: 'token' | 'tool_start' | 'tool_end' | 'error';
+  content?: string;
+  done?: boolean;
+  tool_name?: string | null;
+  tool_input?: unknown;
+  error?: string | null;
+}
+
+export interface StreamChatOptions {
+  signal?: AbortSignal;
+  onEvent?: (event: StreamEvent) => void;
+}
+
 // LocalStorage helpers
 export const getStoredUserToken = () => localStorage.getItem('lma_user_token');
 export const setStoredUserToken = (token: string) => localStorage.setItem('lma_user_token', token);
@@ -151,8 +165,12 @@ export async function streamChat(
   sessionToken: string,
   onChunk: (text: string) => void,
   onDone: () => void,
-  onError: (err: any) => void
+  onError: (err: unknown) => void,
+  options: StreamChatOptions = {}
 ) {
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let receivedDone = false;
+
   try {
     const response = await fetch('/api/v1/chatbot/chat/stream', {
       method: 'POST',
@@ -161,6 +179,7 @@ export async function streamChat(
         'Authorization': `Bearer ${sessionToken}`,
       },
       body: JSON.stringify({ messages }),
+      signal: options.signal,
     });
 
     if (!response.ok) {
@@ -168,7 +187,7 @@ export async function streamChat(
       throw new Error(errText || `Stream request failed with status ${response.status}`);
     }
 
-    const reader = response.body?.getReader();
+    reader = response.body?.getReader() || null;
     if (!reader) {
       throw new Error('ReadableStream not supported by browser.');
     }
@@ -190,20 +209,39 @@ export async function streamChat(
           const jsonStr = trimmed.slice(6).trim();
           if (!jsonStr) continue;
           try {
-            const parsed = JSON.parse(jsonStr);
-            if (parsed.done) {
-              onDone();
-              return;
-            } else if (parsed.content) {
+            const parsed = JSON.parse(jsonStr) as StreamEvent;
+            options.onEvent?.(parsed);
+
+            if (parsed.event === 'error' || parsed.error) {
+              throw new Error(parsed.error || parsed.content || 'Unable to process chat stream');
+            }
+
+            if (parsed.content) {
               onChunk(parsed.content);
             }
+
+            if (parsed.done) {
+              receivedDone = true;
+              onDone();
+              return;
+            }
           } catch (e) {
-            console.error('Error parsing SSE line:', trimmed, e);
+            if (e instanceof SyntaxError) {
+              console.error('Error parsing SSE line:', trimmed, e);
+              continue;
+            }
+            throw e;
           }
         }
       }
     }
+
+    if (!receivedDone) {
+      throw new Error('Stream ended before completion');
+    }
   } catch (error) {
     onError(error);
+  } finally {
+    reader?.releaseLock();
   }
 }

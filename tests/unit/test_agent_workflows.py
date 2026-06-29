@@ -93,7 +93,10 @@ async def test_stream_response_yields_text_and_updates_memory(monkeypatch: pytes
     monkeypatch.setattr(agent, "_get_graph", get_graph)
     monkeypatch.setattr("app.core.langgraph.graph.memory_service", memory)
 
-    chunks = [chunk async for chunk in agent.get_stream_response([Message(role="user", content="Question")], "session-1", "user-1")]
+    chunks = [
+        chunk
+        async for chunk in agent.get_stream_response([Message(role="user", content="Question")], "session-1", "user-1")
+    ]
     await asyncio.sleep(0)
 
     assert chunks == ["Part one ", "part two"]
@@ -113,3 +116,26 @@ async def test_get_chat_history_returns_empty_when_checkpoint_has_no_values(monk
     monkeypatch.setattr(agent, "_get_graph", get_graph)
 
     assert await agent.get_chat_history("new-session") == []
+
+
+def test_process_messages_merges_consecutive_assistant_messages() -> None:
+    """Adjacent assistant chunks from one graph turn render as one chat bubble."""
+    agent = LangGraphAgent()
+
+    messages = agent._LangGraphAgent__process_messages(  # pyright: ignore[reportAttributeAccessIssue]
+        [
+            HumanMessage(content="给我前一周的天气情况"),
+            AIMessage(content="好的，我来查一下。"),
+            AIMessage(content="让我补充查询详细数据。"),
+            AIMessage(content="以下是完整汇总。"),
+            HumanMessage(content="谢谢"),
+            AIMessage(content="不客气。"),
+        ]
+    )
+
+    assert [(message.role, message.content) for message in messages] == [
+        ("user", "给我前一周的天气情况"),
+        ("assistant", "好的，我来查一下。\n\n让我补充查询详细数据。\n\n以下是完整汇总。"),
+        ("user", "谢谢"),
+        ("assistant", "不客气。"),
+    ]

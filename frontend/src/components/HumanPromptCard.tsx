@@ -7,6 +7,8 @@ interface HumanPromptCardProps {
   loading: boolean;
 }
 
+const MAX_MESSAGE_LENGTH = 3000;
+
 export const HumanPromptCard: React.FC<HumanPromptCardProps> = ({ question, onSubmit, loading }) => {
   const [value, setValue] = useState('');
 
@@ -36,6 +38,7 @@ export const HumanPromptCard: React.FC<HumanPromptCardProps> = ({ question, onSu
             value={value}
             onChange={(e) => setValue(e.target.value)}
             disabled={loading}
+            maxLength={MAX_MESSAGE_LENGTH}
             placeholder="输入您的确认说明或答复以继续监测..."
             className="w-full bg-transparent px-4 py-3 text-slate-100 text-sm outline-none resize-none h-20 placeholder:text-slate-500"
             onKeyDown={(e) => {
@@ -49,6 +52,10 @@ export const HumanPromptCard: React.FC<HumanPromptCardProps> = ({ question, onSu
             <span>Shift + Enter 换行</span>
             <span>/</span>
             <span>Enter 发送</span>
+            <span>/</span>
+            <span className={value.length >= 2800 ? 'text-red-400' : ''}>
+              {value.length}/{MAX_MESSAGE_LENGTH}
+            </span>
           </div>
         </div>
 
@@ -56,6 +63,7 @@ export const HumanPromptCard: React.FC<HumanPromptCardProps> = ({ question, onSu
           <button
             type="submit"
             disabled={!value.trim() || loading}
+            aria-label="提交人工干预回复"
             className="px-5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-semibold text-xs tracking-wide uppercase transition-all flex items-center gap-2 active:scale-95 disabled:scale-100"
           >
             {loading ? '正在恢复 Agent...' : '确认并提交指令'}

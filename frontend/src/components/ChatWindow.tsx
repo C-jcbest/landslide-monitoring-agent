@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
 import { SessionInfo, Message } from '../services/api';
 import { ThinkingIndicator } from './ThinkingIndicator';
 import { HumanPromptCard } from './HumanPromptCard';
-import { Send, Trash2, Mountain, AlertCircle, Sparkles, Terminal } from 'lucide-react';
+import { MarkdownMessage } from './MarkdownMessage';
+import { Send, Trash2, Mountain, AlertCircle, Sparkles, Terminal, Loader2 } from 'lucide-react';
 
 interface ChatWindowProps {
   activeSession: SessionInfo | null;
@@ -15,8 +15,11 @@ interface ChatWindowProps {
   onSubmitInterrupt: (response: string) => void;
   loading: boolean;
   streamingText: string;
+  toolStatus: string | null;
   onClearHistory: () => void;
 }
+
+const MAX_MESSAGE_LENGTH = 3000;
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
   activeSession,
@@ -28,6 +31,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onSubmitInterrupt,
   loading,
   streamingText,
+  toolStatus,
   onClearHistory,
 }) => {
   const [inputValue, setInputValue] = useState('');
@@ -44,7 +48,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputValue.trim() && !loading && !isInterrupted) {
+    if (inputValue.trim() && inputValue.length <= MAX_MESSAGE_LENGTH && !loading && !isInterrupted) {
       onSendMessage(inputValue.trim());
       setInputValue('');
     }
@@ -94,7 +98,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></div>
           {activeSession ? (
             <div>
-              <h3 className="text-sm font-semibold text-white">{activeSession.name || '新监测会话'}</h3>
+              <h3 className="text-sm font-semibold text-white">{activeSession.name || '新会话'}</h3>
               <span className="text-[10px] text-slate-400 tracking-wide">监测会话 ID: {activeSession.session_id.slice(0, 8)}...</span>
             </div>
           ) : (
@@ -112,6 +116,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             }}
             className="py-1.5 px-3 rounded-lg bg-slate-800/40 hover:bg-red-950/20 text-slate-400 hover:text-red-400 border border-slate-800 hover:border-red-950/30 text-xs font-medium transition-all flex items-center gap-1.5"
             title="清空历史"
+            aria-label="清空当前会话历史"
           >
             <Trash2 className="w-3.5 h-3.5" />
             清空监测历史
@@ -127,8 +132,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         {messages.length === 0 && !streamingText && (
           <div className="h-60 flex flex-col items-center justify-center text-slate-500 text-xs gap-2">
             <Mountain className="w-8 h-8 opacity-20 animate-bounce" />
-            {isNewSessionDraft 
-              ? '输入首条消息开始滑坡风险监测分析（发送后将自动创建会话）' 
+            {isNewSessionDraft
+              ? '输入首条消息开始滑坡风险监测分析（发送后将自动创建会话）'
               : '会话已就绪，在下方输入问题（例如：“最近降雨是否会导致黄土滑坡风险？”）开启分析。'}
           </div>
         )}
@@ -159,9 +164,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     : 'glass-card text-slate-100 rounded-tl-none border border-slate-800/50'
                 }`}
               >
-                <div className="prose text-sm break-words overflow-hidden leading-relaxed">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                </div>
+                <MarkdownMessage content={msg.content} />
               </div>
             </div>
           );
@@ -174,15 +177,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               AI
             </div>
             <div className="max-w-[75%] rounded-2xl rounded-tl-none px-5 py-3.5 glass-card border border-slate-800/50 shadow-md">
-              <div className="prose text-sm break-words overflow-hidden leading-relaxed">
-                <ReactMarkdown>{streamingText}</ReactMarkdown>
+              <div className="mb-3 flex items-center gap-2 text-[11px] font-medium text-indigo-300">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>{toolStatus || '正在生成回复...'}</span>
               </div>
+              <MarkdownMessage content={streamingText} />
             </div>
           </div>
         )}
 
         {/* Loading status (Thinking) */}
-        {loading && !streamingText && <ThinkingIndicator />}
+        {loading && !streamingText && <ThinkingIndicator statusText={toolStatus || undefined} />}
 
         {/* Human Interrupt Card */}
         {isInterrupted && interruptQuestion && (
@@ -211,6 +216,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             disabled={loading || isInterrupted}
+            maxLength={MAX_MESSAGE_LENGTH}
             placeholder={
               isInterrupted
                 ? '等待上方人工干预指令...'
@@ -218,9 +224,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             }
             className="flex-1 px-4 py-3 rounded-xl glass-input text-slate-100 placeholder:text-slate-500 text-sm outline-none transition-all disabled:opacity-50"
           />
+          <span
+            className={`absolute -top-5 right-14 text-[10px] ${
+              inputValue.length >= 2800 ? 'text-red-400' : 'text-slate-500'
+            }`}
+          >
+            {inputValue.length}/{MAX_MESSAGE_LENGTH}
+          </span>
           <button
             type="submit"
             disabled={!inputValue.trim() || loading || isInterrupted}
+            aria-label="发送消息"
             className="p-3 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-600 hover:brightness-110 text-white transition-all disabled:opacity-30 disabled:scale-100 active:scale-95 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-500/10"
           >
             <Send className="w-4 h-4" />

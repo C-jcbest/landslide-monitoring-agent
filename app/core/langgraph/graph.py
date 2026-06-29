@@ -13,6 +13,7 @@ from langchain_core.messages import (
     AIMessage,
     AIMessageChunk,
     BaseMessage,
+    HumanMessage,
     ToolMessage,
     convert_to_openai_messages,
 )
@@ -316,6 +317,10 @@ class LangGraphAgent:
 
             if state.next:
                 logger.info("resuming_interrupted_graph", session_id=session_id, next_nodes=state.next)
+                await graph.aupdate_state(
+                    config,
+                    {"messages": [HumanMessage(content=messages[-1].content)]},
+                )
                 response = await graph.ainvoke(
                     Command(resume=messages[-1].content),
                     config=config,
@@ -387,6 +392,10 @@ class LangGraphAgent:
 
             if state.next:
                 logger.info("resuming_interrupted_graph_stream", session_id=session_id, next_nodes=state.next)
+                await graph.aupdate_state(
+                    config,
+                    {"messages": [HumanMessage(content=messages[-1].content)]},
+                )
                 graph_input = Command(resume=messages[-1].content)
             else:
                 relevant_memory = relevant_memory or "No relevant memory found."
@@ -439,12 +448,22 @@ class LangGraphAgent:
 
     def __process_messages(self, messages: list[BaseMessage]) -> list[Message]:
         openai_style_messages = convert_to_openai_messages(messages)
-        # keep just assistant and user messages
-        return [
-            Message(role=message["role"], content=str(message["content"]))
-            for message in openai_style_messages
-            if message["role"] in ["assistant", "user"] and message["content"]
-        ]
+        processed_messages: list[Message] = []
+
+        for message in openai_style_messages:
+            role = message["role"]
+            content = str(message["content"]).strip()
+
+            if role not in ["assistant", "user"] or not content:
+                continue
+
+            if role == "assistant" and processed_messages and processed_messages[-1].role == "assistant":
+                processed_messages[-1].content = f"{processed_messages[-1].content}\n\n{content}"
+                continue
+
+            processed_messages.append(Message(role=role, content=content))
+
+        return processed_messages
 
     async def clear_chat_history(self, session_id: str) -> None:
         """Clear all chat history for a given thread ID.

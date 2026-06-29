@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
@@ -14,7 +14,33 @@ import {
   deleteSession,
   clearChatHistory,
   streamChat,
+  StreamEvent,
 } from './services/api';
+
+interface ChatResponseData {
+  messages?: Message[];
+  is_interrupted?: boolean;
+  interrupt_question?: string | null;
+}
+
+const isAbortError = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
+
+const buildToolStatus = (event: StreamEvent): string | null | undefined => {
+  if (event.event === 'tool_start') {
+    const toolName = event.tool_name || '工具';
+    const query =
+      typeof event.tool_input === 'object' && event.tool_input !== null && 'query' in event.tool_input
+        ? String((event.tool_input as { query?: unknown }).query || '')
+        : '';
+    return query ? `正在使用 ${toolName} 查询：${query}` : `正在使用 ${toolName} 处理监测数据...`;
+  }
+
+  if (event.event === 'tool_end') {
+    return null;
+  }
+
+  return undefined;
+};
 
 export const App: React.FC = () => {
   const [userToken, setUserToken] = useState<string | null>(getStoredUserToken());
@@ -27,6 +53,14 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [isNewSessionDraft, setIsNewSessionDraft] = useState(false);
+  const [toolStatus, setToolStatus] = useState<string | null>(null);
+  const activeSessionRef = useRef<SessionInfo | null>(activeSession);
+  const fetchAbortControllerRef = useRef<AbortController | null>(null);
+  const streamAbortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    activeSessionRef.current = activeSession;
+  }, [activeSession]);
 
   // Load user sessions upon successful login
   useEffect(() => {
@@ -39,14 +73,14 @@ export const App: React.FC = () => {
     try {
       if (!userToken) return;
       const data = await getSessions(userToken);
-      
+
       const processed = data.map(s => {
         if (!s.name || s.name.trim() === "") {
-          return { ...s, name: "新监测会话" };
+          return { ...s, name: "新会话" };
         }
         return s;
       });
-      
+
       // Sort in reverse chronological order (newest first)
       processed.reverse();
       setSessions(processed);
@@ -70,10 +104,17 @@ export const App: React.FC = () => {
   };
 
   const handleSelectSession = async (session: SessionInfo) => {
+    fetchAbortControllerRef.current?.abort();
+    streamAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortControllerRef.current = controller;
+
     setIsNewSessionDraft(false);
     setActiveSession(session);
+    activeSessionRef.current = session;
     setMessages([]);
     setStreamingText('');
+    setToolStatus(null);
     setIsInterrupted(false);
     setInterruptQuestion(null);
     setLoading(true);
@@ -81,24 +122,38 @@ export const App: React.FC = () => {
     try {
       const response = await fetch(`/api/v1/chatbot/messages`, {
         headers: { 'Authorization': `Bearer ${session.token.access_token}` },
+        signal: controller.signal,
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as ChatResponseData;
+        if (activeSessionRef.current?.session_id !== session.session_id) return;
         setMessages(data.messages || []);
         setIsInterrupted(data.is_interrupted || false);
         setInterruptQuestion(data.interrupt_question || null);
       }
     } catch (err) {
+      if (isAbortError(err)) return;
       console.error('Failed to fetch messages', err);
     } finally {
-      setLoading(false);
+      if (fetchAbortControllerRef.current === controller) {
+        fetchAbortControllerRef.current = null;
+      }
+      if (activeSessionRef.current?.session_id === session.session_id) {
+        setLoading(false);
+      }
     }
   };
 
   const handleCreateSession = () => {
+    fetchAbortControllerRef.current?.abort();
+    streamAbortControllerRef.current?.abort();
     setIsNewSessionDraft(true);
     setActiveSession(null);
+    activeSessionRef.current = null;
     setMessages([]);
+    setStreamingText('');
+    setToolStatus(null);
+    setLoading(false);
     setIsInterrupted(false);
     setInterruptQuestion(null);
   };
@@ -124,13 +179,19 @@ export const App: React.FC = () => {
 
     try {
       await deleteSession(targetSession.token.access_token, sessionId);
-      setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+      const targetIndex = sessions.findIndex((s) => s.session_id === sessionId);
+      const remainingSessions = sessions.filter((s) => s.session_id !== sessionId);
+      setSessions(remainingSessions);
 
       if (activeSession?.session_id === sessionId) {
-        setActiveSession(null);
-        setMessages([]);
-        setIsInterrupted(false);
-        setInterruptQuestion(null);
+        const nextIndex = Math.min(Math.max(targetIndex, 0), remainingSessions.length - 1);
+        const nextSession = remainingSessions[nextIndex];
+
+        if (nextSession) {
+          await handleSelectSession(nextSession);
+        } else {
+          handleCreateSession();
+        }
       }
     } catch (err) {
       alert('删除会话失败，请重试。');
@@ -152,23 +213,24 @@ export const App: React.FC = () => {
   const handleSendMessage = async (content: string) => {
     let session = activeSession;
     let updatedSessions = [...sessions];
-    
+
     if (isNewSessionDraft) {
       if (!userToken) return;
       try {
         setLoading(true);
         // 1. Create the session on the backend
         const newSession = await createSession(userToken);
-        
+
         // 2. Set generating title flag and empty name
         newSession.isGeneratingTitle = true;
         newSession.name = "";
-        
+
         // 3. Add to sessions list and select it
         session = newSession;
         updatedSessions = [newSession, ...sessions];
         setSessions(updatedSessions);
         setActiveSession(newSession);
+        activeSessionRef.current = newSession;
         setIsNewSessionDraft(false);
       } catch (err) {
         alert('初始化监测会话失败，请重试。');
@@ -186,27 +248,52 @@ export const App: React.FC = () => {
     setMessages(updatedMessages);
     setLoading(true);
     setStreamingText('');
+    setToolStatus(null);
+
+    streamAbortControllerRef.current?.abort();
+    const streamController = new AbortController();
+    streamAbortControllerRef.current = streamController;
+    const requestSession = session;
 
     try {
       await streamChat(
-        updatedMessages,
-        session.token.access_token,
+        [userMessage],
+        requestSession.token.access_token,
         (chunk) => {
+          if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
           setStreamingText((prev) => prev + chunk);
         },
         async () => {
+          if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
           // Streaming finished, synchronize backend messages state
-          await syncMessagesState(session);
+          await syncMessagesState(requestSession);
         },
         (err) => {
+          if (isAbortError(err)) return;
+          if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
           console.error(err);
           alert('接收流式回复出错，连接可能已断开，请重试。');
           setLoading(false);
+          setToolStatus(null);
+        },
+        {
+          signal: streamController.signal,
+          onEvent: (event) => {
+            if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
+            const status = buildToolStatus(event);
+            if (status !== undefined) {
+              setToolStatus(status);
+            }
+          },
         }
       );
     } catch (err) {
       console.error(err);
       setLoading(false);
+    } finally {
+      if (streamAbortControllerRef.current === streamController) {
+        streamAbortControllerRef.current = null;
+      }
     }
   };
 
@@ -221,62 +308,80 @@ export const App: React.FC = () => {
     setInterruptQuestion(null);
     setLoading(true);
     setStreamingText('');
+    setToolStatus(null);
+
+    streamAbortControllerRef.current?.abort();
+    const streamController = new AbortController();
+    streamAbortControllerRef.current = streamController;
+    const requestSession = activeSession;
 
     try {
       await streamChat(
-        updatedMessages,
-        activeSession.token.access_token,
+        [userResponse],
+        requestSession.token.access_token,
         (chunk) => {
+          if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
           setStreamingText((prev) => prev + chunk);
         },
         async () => {
-          await syncMessagesState(activeSession);
+          if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
+          await syncMessagesState(requestSession);
         },
         (err) => {
+          if (isAbortError(err)) return;
+          if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
           console.error(err);
           alert('发送干预回复出错，请重试。');
           setLoading(false);
+          setToolStatus(null);
+        },
+        {
+          signal: streamController.signal,
+          onEvent: (event) => {
+            if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
+            const status = buildToolStatus(event);
+            if (status !== undefined) {
+              setToolStatus(status);
+            }
+          },
         }
       );
     } catch (err) {
       console.error(err);
       setLoading(false);
+    } finally {
+      if (streamAbortControllerRef.current === streamController) {
+        streamAbortControllerRef.current = null;
+      }
     }
   };
 
   const syncMessagesState = async (session: SessionInfo) => {
     try {
-      let firstUserMsg = "";
+      if (activeSessionRef.current?.session_id !== session.session_id) return;
       const response = await fetch(`/api/v1/chatbot/messages`, {
         headers: { 'Authorization': `Bearer ${session.token.access_token}` },
       });
       if (response.ok) {
-        const data = await response.json();
+        const data = (await response.json()) as ChatResponseData;
+        if (activeSessionRef.current?.session_id !== session.session_id) return;
         setMessages(data.messages || []);
         // Batch stream text clearing and loading stop to prevent double AI message rendering
         setStreamingText('');
         setLoading(false);
+        setToolStatus(null);
         setIsInterrupted(data.is_interrupted || false);
         setInterruptQuestion(data.interrupt_question || null);
-        
-        firstUserMsg = data.messages.find((m: any) => m.role === 'user')?.content || "";
       }
 
       // Fetch sessions list from backend to check if the naming task has completed
       if (!userToken) return;
       const data = await getSessions(userToken);
-      
+      if (activeSessionRef.current?.session_id !== session.session_id) return;
+
       const updatedSessions = data.map(s => {
-        // Clear isGeneratingTitle flag on the updated session list
-        if (s.session_id === session.session_id) {
-          // If the backend has not set a name (remains empty due to error/timeout),
-          // fallback to extracting the first user message content sliced to 15 characters.
-          if (!s.name || s.name.trim() === "") {
-            const fallbackName = firstUserMsg 
-              ? (firstUserMsg.slice(0, 15) + (firstUserMsg.length > 15 ? '...' : ''))
-              : '新监测会话';
-            return { ...s, name: fallbackName, isGeneratingTitle: false };
-          }
+        if (!s.name || s.name.trim() === "") {
+          return { ...s, name: "新会话", isGeneratingTitle: false };
         }
         return { ...s, isGeneratingTitle: false };
       });
@@ -287,22 +392,32 @@ export const App: React.FC = () => {
       const activeSec = updatedSessions.find(s => s.session_id === session.session_id);
       if (activeSec) {
         setActiveSession(activeSec);
+        activeSessionRef.current = activeSec;
       }
     } catch (e) {
       console.error('Error synchronizing chat history:', e);
     } finally {
-      setLoading(false);
-      setStreamingText('');
+      if (activeSessionRef.current?.session_id === session.session_id) {
+        setLoading(false);
+        setStreamingText('');
+        setToolStatus(null);
+      }
     }
   };
 
   const handleLogout = () => {
+    fetchAbortControllerRef.current?.abort();
+    streamAbortControllerRef.current?.abort();
     removeStoredUserToken();
     removeStoredUsername();
     setUserToken(null);
     setSessions([]);
     setActiveSession(null);
+    activeSessionRef.current = null;
     setMessages([]);
+    setStreamingText('');
+    setToolStatus(null);
+    setLoading(false);
     setIsInterrupted(false);
     setInterruptQuestion(null);
   };
@@ -322,6 +437,7 @@ export const App: React.FC = () => {
         onRenameSession={handleRenameSession}
         onDeleteSession={handleDeleteSession}
         onLogout={handleLogout}
+        isGeneratingMessage={loading}
       />
       <ChatWindow
         activeSession={activeSession}
@@ -333,6 +449,7 @@ export const App: React.FC = () => {
         onSubmitInterrupt={handleSubmitInterrupt}
         loading={loading}
         streamingText={streamingText}
+        toolStatus={toolStatus}
         onClearHistory={handleClearHistory}
       />
     </div>

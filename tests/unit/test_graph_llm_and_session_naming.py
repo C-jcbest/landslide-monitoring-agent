@@ -162,7 +162,7 @@ async def test_llm_call_enforces_total_timeout(monkeypatch: pytest.MonkeyPatch) 
 
 @pytest.mark.parametrize(
     ("source", "expected"),
-    [("  first   user message  ", "first user message"), ("   ", "New chat")],
+    [("  first   user message  ", "first user message"), ("   ", "新会话")],
 )
 def test_session_name_placeholder_is_stable(source: str, expected: str) -> None:
     """Placeholder titles are human-readable and bounded before persistence."""

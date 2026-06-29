@@ -101,22 +101,52 @@
 }
 
 /* Markdown styling overrides */
-.prose {
+.message-markdown {
   color: #cbd5e1;
 }
-.prose p {
+.message-markdown > :first-child {
+  margin-top: 0;
+}
+.message-markdown > :last-child {
+  margin-bottom: 0;
+}
+.message-markdown p {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
   line-height: 1.625;
 }
-.prose code {
+.message-markdown h1,
+.message-markdown h2,
+.message-markdown h3,
+.message-markdown h4 {
+  color: #f8fafc;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 0.9rem;
+  margin-bottom: 0.45rem;
+}
+.message-markdown h1 {
+  font-size: 1.15rem;
+}
+.message-markdown h2 {
+  font-size: 1.05rem;
+}
+.message-markdown h3,
+.message-markdown h4 {
+  font-size: 0.95rem;
+}
+.message-markdown strong {
+  color: #e2e8f0;
+  font-weight: 700;
+}
+.message-markdown code {
   background: rgba(255, 255, 255, 0.08);
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
   font-family: monospace;
   font-size: 0.9em;
 }
-.prose pre {
+.message-markdown pre {
   background: rgba(7, 10, 19, 0.7);
   padding: 0.75rem;
   border-radius: 0.5rem;
@@ -125,35 +155,58 @@
   margin-top: 0.75rem;
   margin-bottom: 0.75rem;
 }
-.prose pre code {
+.message-markdown pre code {
   background: transparent;
   padding: 0;
   border-radius: 0;
   font-size: 0.875em;
   color: #e2e8f0;
 }
-.prose ul, .prose ol {
+.message-markdown ul,
+.message-markdown ol {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
   padding-left: 1.25rem;
 }
-.prose ul {
+.message-markdown ul {
   list-style-type: disc;
 }
-.prose ol {
+.message-markdown ol {
   list-style-type: decimal;
 }
-.prose table {
-  width: 100%;
-  border-collapse: collapse;
+.message-markdown li {
+  margin-top: 0.2rem;
+  margin-bottom: 0.2rem;
+}
+.message-markdown blockquote {
+  border-left: 3px solid rgba(129, 140, 248, 0.55);
+  margin: 0.75rem 0;
+  padding-left: 0.85rem;
+  color: #94a3b8;
+}
+.markdown-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
   margin-top: 0.75rem;
   margin-bottom: 0.75rem;
-}
-.prose th, .prose td {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.5rem 0.75rem;
-  text-align: left;
+  border-radius: 0.5rem;
 }
-.prose th {
+.message-markdown table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.message-markdown th,
+.message-markdown td {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.message-markdown th {
   background: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0;
+  font-weight: 700;
 }

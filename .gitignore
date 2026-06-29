@@ -21,3 +21,10 @@ wheels/
 
 # Reports
 evals/reports/
+
+# Frontend
+frontend/node_modules/
+frontend/.npm-cache/
+frontend/dist/
+frontend/.vite/
+frontend/node_modules/.vite/

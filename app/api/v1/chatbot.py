@@ -139,11 +139,11 @@ async def chat_stream(
                     async for chunk in agent.get_stream_response(
                         chat_request.messages, session.id, user_id=str(session.user_id), username=session.username
                     ):
-                        response = StreamResponse(content=chunk, done=False)
+                        response = StreamResponse(event="token", content=chunk, done=False)
                         yield f"data: {json.dumps(response.model_dump(mode='json'))}\n\n"
 
                 # Send final message indicating completion
-                final_response = StreamResponse(content="", done=True)
+                final_response = StreamResponse(event="done", content="", done=True)
                 yield f"data: {json.dumps(final_response.model_dump(mode='json'))}\n\n"
 
             except Exception as e:
@@ -152,7 +152,12 @@ async def chat_stream(
                     session_id=session.id,
                     error=str(e),
                 )
-                error_response = StreamResponse(content="Unable to process chat stream", done=True)
+                error_response = StreamResponse(
+                    event="error",
+                    content="",
+                    done=True,
+                    error="Unable to process chat stream",
+                )
                 yield f"data: {json.dumps(error_response.model_dump(mode='json'))}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")

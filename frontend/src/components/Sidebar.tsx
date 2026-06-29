@@ -11,6 +11,7 @@ interface SidebarProps {
   onRenameSession: (sessionId: string, newName: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onLogout: () => void;
+  isGeneratingMessage?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -22,6 +23,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRenameSession,
   onDeleteSession,
   onLogout,
+  isGeneratingMessage = false,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -46,6 +48,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setEditingId(null);
   };
 
+  const handleSessionKeyDown = (e: React.KeyboardEvent, session: SessionInfo, isEditing: boolean) => {
+    if (isEditing) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelectSession(session);
+    }
+  };
+
   return (
     <div className="w-80 h-full flex flex-col glass border-r border-slate-800/60 text-slate-200">
       {/* Header */}
@@ -63,6 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 shrink-0">
         <button
           onClick={onCreateSession}
+          aria-label="新建监测会话"
           className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-500/10 to-blue-600/10 hover:from-indigo-500/20 hover:to-blue-600/20 border border-indigo-500/30 hover:border-indigo-500/50 text-indigo-300 hover:text-white font-medium text-sm transition-all duration-200 active:scale-[0.98] flex items-center justify-center gap-2 group"
         >
           <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-200" />
@@ -71,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Sessions List */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1" role="listbox" aria-label="历史监测会话">
         {sessions.length === 0 && !isNewSessionDraft ? (
           <div className="h-40 flex flex-col items-center justify-center text-slate-500 text-xs px-4 text-center">
             <MessageSquare className="w-8 h-8 mb-2 opacity-30" />
@@ -92,11 +103,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }
             const isActive = session.session_id === activeSessionId;
             const isEditing = session.session_id === editingId;
+            const actionsDisabled = isGeneratingMessage;
 
             return (
               <div
                 key={session.session_id}
                 onClick={() => !isEditing && onSelectSession(session)}
+                onKeyDown={(e) => handleSessionKeyDown(e, session, isEditing)}
+                role="option"
+                aria-selected={isActive}
+                tabIndex={isEditing ? -1 : 0}
                 className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all duration-150 cursor-pointer ${
                   isActive
                     ? 'bg-indigo-500/15 border border-indigo-500/20 text-white font-medium'
@@ -119,15 +135,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       autoFocus
                     />
                   ) : (
-                    <span className="truncate text-slate-200">{session.name || '新监测会话'}</span>
+                    <span className="truncate text-slate-200">{session.name || '新会话'}</span>
                   )}
                 </div>
 
                 {/* Hover Action Buttons */}
-                {!isEditing && (
-                  <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                {!isEditing && !actionsDisabled && (
+                  <div className="flex items-center gap-1.5 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity">
                     <button
                       onClick={(e) => handleStartRename(e, session)}
+                      aria-label={`重命名会话 ${session.name || '新会话'}`}
                       className="p-1 rounded hover:bg-slate-700/50 text-slate-500 hover:text-slate-200 transition-colors"
                       title="重命名"
                     >
@@ -138,8 +155,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         e.stopPropagation();
                         if (confirm('确认删除此监测会话吗？')) onDeleteSession(session.session_id);
                       }}
+                      aria-label={`删除会话 ${session.name || '新会话'}`}
                       className="p-1 rounded hover:bg-red-950/40 text-slate-500 hover:text-red-400 transition-colors"
-                      title="删除会harm"
+                      title="删除会话"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -150,12 +168,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <div className="flex items-center gap-1 shrink-0 ml-1">
                     <button
                       onClick={(e) => handleSaveRename(e, session.session_id)}
+                      aria-label="保存会话名称"
                       className="p-1 rounded bg-green-500/10 hover:bg-green-500/20 text-green-400"
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={handleCancelRename}
+                      aria-label="取消重命名"
                       className="p-1 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -182,6 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <button
             onClick={onLogout}
+            aria-label="退出登录"
             className="p-2 rounded-lg bg-slate-800/50 hover:bg-red-950/20 text-slate-400 hover:text-red-400 transition-all border border-slate-800 hover:border-red-950/30"
             title="退出登录"
           >

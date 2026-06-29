@@ -34,7 +34,7 @@ _background_tasks: set[asyncio.Task] = set()
 
 def _build_placeholder(user_message: str) -> str:
     cleaned = " ".join(user_message.split())
-    return cleaned[:_PLACEHOLDER_MAX].rstrip() or "New chat"
+    return cleaned[:_PLACEHOLDER_MAX].rstrip() or "新会话"
 
 
 def _claim_session(session_id: str, placeholder: str) -> bool:

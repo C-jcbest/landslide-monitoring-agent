@@ -2,6 +2,7 @@
 
 import re
 from typing import (
+    Any,
     List,
     Literal,
     Optional,
@@ -76,9 +77,12 @@ class ChatResponse(BaseResponse):
     """
 
     messages: List[Message] = Field(..., description="List of messages in the conversation")
-    is_interrupted: bool = Field(default=False, description="Whether the conversation is currently interrupted/waiting for human input")
-    interrupt_question: Optional[str] = Field(default=None, description="The question/prompt from the active interrupt")
-
+    is_interrupted: bool = Field(
+        default=False, description="Whether the conversation is currently interrupted/waiting for human input"
+    )
+    interrupt_question: Optional[str] = Field(
+        default=None, description="The question/prompt from the active interrupt"
+    )
 
 
 class StreamResponse(BaseResponse):
@@ -89,8 +93,15 @@ class StreamResponse(BaseResponse):
         done: Whether the stream is complete.
     """
 
+    event: Literal["token", "tool_start", "tool_end", "error", "done"] = Field(
+        default="token",
+        description="The stream event type",
+    )
     content: str = Field(default="", description="The content of the current chunk")
     done: bool = Field(default=False, description="Whether the stream is complete")
+    tool_name: Optional[str] = Field(default=None, description="The tool name for tool events")
+    tool_input: Optional[dict[str, Any]] = Field(default=None, description="The tool input for tool events")
+    error: Optional[str] = Field(default=None, description="The error message for error events")
 
 
 class SessionTitle(BaseModel):
