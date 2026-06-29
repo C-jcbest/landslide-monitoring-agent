@@ -1,0 +1,1 @@
+"""Beidou platform integration services."""
