@@ -198,8 +198,7 @@ class Settings:
         self.BEIDOU_CREDENTIAL_ENCRYPTION_KEY = os.getenv("BEIDOU_CREDENTIAL_ENCRYPTION_KEY", "")
         self.BEIDOU_API_TIMEOUT_SECONDS = float(os.getenv("BEIDOU_API_TIMEOUT_SECONDS", "10"))
         self.BEIDOU_SESSION_TTL_SECONDS = int(os.getenv("BEIDOU_SESSION_TTL_SECONDS", "28800"))
-        self.BEIDOU_STATION_PAGE_SIZE = int(os.getenv("BEIDOU_STATION_PAGE_SIZE", "100"))
-        self.BEIDOU_STATION_CANDIDATE_LIMIT = int(os.getenv("BEIDOU_STATION_CANDIDATE_LIMIT", "20"))
+        self.BEIDOU_STATION_PAGE_SIZE = int(os.getenv("BEIDOU_STATION_PAGE_SIZE", "-1"))
 
         # Rate Limiting Configuration
         self.RATE_LIMIT_DEFAULT = parse_list_from_env("RATE_LIMIT_DEFAULT", ["200 per day", "50 per hour"])

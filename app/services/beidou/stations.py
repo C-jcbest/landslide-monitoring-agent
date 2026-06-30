@@ -167,6 +167,7 @@ class BeidouStationClient:
             "beidou_station_list_requested",
             has_station_group=station_group_uuid is not None,
             has_station_uuid=station_uuid is not None,
+            page_size=page_size or settings.BEIDOU_STATION_PAGE_SIZE,
         )
         request_page_size = page_size or settings.BEIDOU_STATION_PAGE_SIZE
         request_payload: dict[str, Any] = {
@@ -186,7 +187,19 @@ class BeidouStationClient:
         stations = payload.get("StationList")
         if not isinstance(stations, list):
             raise BeidouStationError("beidou_bad_response", "北斗平台返回站点列表格式异常。", retryable=False)
-        return [_parse_station(item) for item in stations if isinstance(item, dict)]
+        page_info = _parse_page_info(payload.get("PageInfo") if isinstance(payload.get("PageInfo"), dict) else None)
+        parsed_stations = [_parse_station(item) for item in stations if isinstance(item, dict)]
+        logger.info(
+            "beidou_station_list_finished",
+            station_count=len(parsed_stations),
+            raw_station_count=len(stations),
+            page_number=page_info.page_number,
+            page_size=page_info.page_size,
+            total_number=page_info.total_number,
+            has_station_group=station_group_uuid is not None,
+            has_station_uuid=station_uuid is not None,
+        )
+        return parsed_stations
 
     async def get_station_detail(self, session: BeidouSession, station_uuid: str) -> BeidouStation:
         """Return exactly one station detail by StationUUID."""
@@ -274,7 +287,13 @@ class BeidouStationService:
     async def get_station_candidates(self, session: BeidouSession) -> list[StationCandidate]:
         """Return LLM-safe station candidates for the current user session."""
         stations = await self.client.get_stations(session)
-        return [station_to_candidate(station) for station in stations[: settings.BEIDOU_STATION_CANDIDATE_LIMIT]]
+        candidates = [station_to_candidate(station) for station in stations]
+        logger.info(
+            "beidou_station_candidates_finished",
+            station_count=len(stations),
+            candidate_count=len(candidates),
+        )
+        return candidates
 
 
 def create_beidou_station_service() -> BeidouStationService:

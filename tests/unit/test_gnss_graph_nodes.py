@@ -150,6 +150,56 @@ async def test_request_planner_routes_gnss_request_to_gnss_agent() -> None:
     assert command.update["gnss_tool_rounds"] == 0
 
 
+async def test_request_planner_receives_recent_dialogue_context() -> None:
+    """Planner sees recent user and assistant messages when resolving follow-up intent."""
+    agent = LangGraphAgent()
+    agent.llm_service = FakeLLMService(
+        [AgentPlan(route="gnss", intent="station_list", needs_station=False, reason="延续上一轮站点数量查询。")]
+    )
+    state = GraphState(
+        messages=[
+            HumanMessage(content="现在北斗监测平台有多少监测点"),
+            AIMessage(content="当前北斗监测平台共有 20 个监测点。"),
+            HumanMessage(content="重新查询"),
+        ]
+    )
+
+    await agent._request_planner(state, _config())  # pyright: ignore[reportPrivateUsage]
+
+    planner_messages = agent.llm_service.calls[0]["messages"]
+    planner_context = planner_messages[1]["content"]
+    assert "用户：现在北斗监测平台有多少监测点" in planner_context
+    assert "助手：当前北斗监测平台共有 20 个监测点。" in planner_context
+    assert "用户：重新查询" in planner_context
+    assert "请判断最后一条用户消息的真实业务意图" in planner_context
+
+
+async def test_request_planner_context_excludes_tool_messages() -> None:
+    """Planner context excludes tool JSON to reduce prompt-injection and payload noise."""
+    agent = LangGraphAgent()
+    agent.llm_service = FakeLLMService(
+        [AgentPlan(route="gnss", intent="station_list", needs_station=False, reason="站点数量查询。")]
+    )
+    state = GraphState(
+        messages=[
+            HumanMessage(content="现在北斗监测平台有多少监测点"),
+            ToolMessage(
+                content='{"ok": true, "station_candidates": [{"station_name": "北坡 GNSS 01"}]}', tool_call_id="call-1"
+            ),
+            AIMessage(content="当前北斗监测平台共有 20 个监测点。"),
+            HumanMessage(content="重新查询"),
+        ]
+    )
+
+    await agent._request_planner(state, _config())  # pyright: ignore[reportPrivateUsage]
+
+    planner_messages = agent.llm_service.calls[0]["messages"]
+    planner_context = planner_messages[1]["content"]
+    assert "station_candidates" not in planner_context
+    assert "北坡 GNSS 01" not in planner_context
+    assert "用户：重新查询" in planner_context
+
+
 async def test_request_planner_routes_unsupported_request_to_render() -> None:
     """Non-monitoring requests are rendered as unsupported without reaching tools."""
     agent = LangGraphAgent()

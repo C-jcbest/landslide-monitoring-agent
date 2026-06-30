@@ -1,5 +1,6 @@
 """Tests for Beidou station query service."""
 
+import json
 from typing import Any
 
 import httpx
@@ -137,6 +138,21 @@ async def test_upstream_permission_denied_is_mapped_to_structured_error() -> Non
     assert not error.value.retryable
 
 
+async def test_station_list_requests_all_rows_by_default() -> None:
+    """Station list requests use the upstream all-rows page size by default."""
+    seen: list[dict[str, Any]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.read().decode()))
+        return httpx.Response(200, json=_station_payload(), request=request)
+
+    client = BeidouStationClient(base_url="https://beidou.example/API", transport=httpx.MockTransport(handler))
+
+    await client.get_stations(BeidouSession(session_uuid=SESSION_UUID))
+
+    assert seen[0]["PageInfo"]["PageSize"] == -1
+
+
 async def test_candidate_projection_excludes_session_uuid_and_raw_response() -> None:
     """Candidate data sent to the LLM is deliberately narrow and does not leak session credentials."""
     client = BeidouStationClient(base_url="https://beidou.example/API", transport=_transport(_station_payload()))
@@ -160,3 +176,25 @@ async def test_candidate_projection_excludes_session_uuid_and_raw_response() -> 
         "base_station_name": "北坡基准站",
     }
     assert SESSION_UUID not in str(projected)
+
+
+async def test_station_candidates_are_not_truncated_to_twenty() -> None:
+    """All upstream station candidates are preserved for station count answers."""
+    payload = _station_payload()
+    station_template = payload["StationList"][0]
+    payload["PageInfo"]["TotalNumber"] = 25
+    payload["StationList"] = [
+        {
+            **station_template,
+            "StationUUID": f"station-{index:02d}",
+            "StationName": f"北坡 GNSS {index:02d}",
+        }
+        for index in range(1, 26)
+    ]
+    client = BeidouStationClient(base_url="https://beidou.example/API", transport=_transport(payload))
+    service = BeidouStationService(client)
+
+    candidates = await service.get_station_candidates(BeidouSession(session_uuid=SESSION_UUID))
+
+    assert len(candidates) == 25
+    assert candidates[-1].station_uuid == "station-25"

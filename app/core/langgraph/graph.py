@@ -85,6 +85,8 @@ from app.utils import (
 PostgresConnPool = AsyncConnectionPool[AsyncConnection[DictRow]]
 GNSS_RESPONSE_PREVIEW_LIMIT = 10
 GNSS_TOOL_ROUND_LIMIT = 3
+MAX_PLANNER_CONTEXT_MESSAGES = 6
+MAX_PLANNER_CONTEXT_CHARS_PER_MESSAGE = 300
 
 
 class OpenMeteoStationWeatherService:
@@ -220,15 +222,19 @@ class LangGraphAgent:
         started = time.monotonic()
         thread_id = config.get("configurable", {}).get("thread_id")
         latest_user_text = _latest_user_text(state)
+        planner_context = _recent_planner_context(state)
         logger.info(
             "gnss_request_planner_started",
             session_id=thread_id,
             state_message_count=len(state.messages),
             latest_user_length=len(latest_user_text),
+            planner_context_length=len(planner_context),
         )
         system_prompt = (
             "你是滑坡监测智能体的请求规划器。"
-            "请判断用户最新请求是否属于 GNSS/北斗监测业务。"
+            "你会收到最近几条对话，请判断最后一条用户消息的真实业务意图。"
+            "当最后一条用户消息依赖上下文、追问、重试、刷新或省略主语时，"
+            "请结合最近对话判断它延续的业务意图。"
             "涉及平台内站点资产、分组、数量、列表、状态或详情的事实查询，"
             "以及 GNSS 查询、分析、报告和订阅意图，都属于 GNSS 业务。"
             "天气、闲聊、通用知识和非监测内容应标记为 unsupported。"
@@ -239,7 +245,7 @@ class LangGraphAgent:
         )
         messages = [
             Message(role="system", content=system_prompt),
-            Message(role="user", content=latest_user_text),
+            Message(role="user", content=planner_context),
         ]
         plan = cast(
             AgentPlan,
@@ -1023,6 +1029,39 @@ def _latest_user_text(state: GraphState) -> str:
         if message.role == "user":
             return message.content
     return ""
+
+
+def _recent_planner_context(state: GraphState) -> str:
+    """Build a bounded recent dialogue context for request planning."""
+    items: list[str] = []
+    for message in state.messages:
+        role: str | None = None
+        if isinstance(message, HumanMessage):
+            role = "用户"
+        elif isinstance(message, AIMessage):
+            content = extract_text_content(message.content)
+            if not content:
+                continue
+            role = "助手"
+        else:
+            continue
+
+        content = _truncate_for_planner(extract_text_content(message.content))
+        if not content:
+            continue
+        items.append(f"{role}：{content}")
+
+    recent_items = items[-MAX_PLANNER_CONTEXT_MESSAGES:]
+    dialogue = "\n".join(recent_items)
+    return f"最近对话：\n{dialogue}\n\n请判断最后一条用户消息的真实业务意图。"
+
+
+def _truncate_for_planner(text: str) -> str:
+    """Normalize and bound a dialogue message before sending it to the planner."""
+    normalized = " ".join(text.split())
+    if len(normalized) <= MAX_PLANNER_CONTEXT_CHARS_PER_MESSAGE:
+        return normalized
+    return normalized[:MAX_PLANNER_CONTEXT_CHARS_PER_MESSAGE] + "..."
 
 
 def _build_clarification_question(candidates: list[StationCandidate]) -> str:
