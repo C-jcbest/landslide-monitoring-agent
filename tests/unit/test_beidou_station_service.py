@@ -151,7 +151,11 @@ async def test_candidate_projection_excludes_session_uuid_and_raw_response() -> 
         "station_group_name": "北坡监测组",
         "device_uuid": "DEV-BP-001",
         "station_type": 3,
+        "station_type_label": "移动站 RTK 模式",
+        "station_type_description": "移动站 RTK 模式（监测点类型=3）",
         "station_status": 10,
+        "station_status_label": "正常",
+        "station_status_description": "正常（监测点状态=10）",
         "station_location": "北坡一号滑坡体",
         "base_station_name": "北坡基准站",
     }

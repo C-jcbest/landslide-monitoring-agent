@@ -5,6 +5,7 @@ streaming chat, message history management, and chat history clearing.
 """
 
 import json
+import time
 
 from fastapi import (
     APIRouter,
@@ -44,7 +45,7 @@ async def _get_interrupt_details(session_id: str) -> tuple[bool, str | None]:
     for task in state.tasks:
         if task.interrupts:
             return True, str(task.interrupts[0].value)
-    return True, None
+    return True, "Agent 正在等待补充信息，请输入你的回复后继续。"
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -67,6 +68,7 @@ async def chat(
     Raises:
         HTTPException: If there's an error processing the request.
     """
+    started = time.monotonic()
     try:
         logger.info(
             "chat_request_received",
@@ -81,7 +83,12 @@ async def chat(
             chat_request.messages, session.id, user_id=str(session.user_id), username=session.username
         )
 
-        logger.info("chat_request_processed", session_id=session.id)
+        logger.info(
+            "chat_request_processed",
+            session_id=session.id,
+            duration_ms=_elapsed_ms(started),
+            response_message_count=len(result),
+        )
 
         is_interrupted, interrupt_question = await _get_interrupt_details(session.id)
 
@@ -91,7 +98,7 @@ async def chat(
             interrupt_question=interrupt_question,
         )
     except Exception as e:
-        logger.exception("chat_request_failed", session_id=session.id, error=str(e))
+        logger.exception("chat_request_failed", session_id=session.id, error=str(e), duration_ms=_elapsed_ms(started))
         raise HTTPException(status_code=500, detail="Unable to process chat request")
 
 
@@ -115,6 +122,7 @@ async def chat_stream(
     Raises:
         HTTPException: If there's an error processing the request.
     """
+    request_started = time.monotonic()
     try:
         logger.info(
             "stream_chat_request_received",
@@ -134,23 +142,49 @@ async def chat_stream(
             Raises:
                 Exception: If there's an error during streaming.
             """
+            stream_started = time.monotonic()
+            first_chunk_ms: float | None = None
+            chunk_count = 0
+            total_chars = 0
             try:
+                logger.info("stream_chat_response_started", session_id=session.id)
                 with llm_stream_duration_seconds.labels(model=agent.llm_service.get_llm().get_name()).time():
                     async for chunk in agent.get_stream_response(
                         chat_request.messages, session.id, user_id=str(session.user_id), username=session.username
                     ):
+                        if first_chunk_ms is None:
+                            first_chunk_ms = _elapsed_ms(stream_started)
+                            logger.info(
+                                "stream_chat_first_chunk_sent",
+                                session_id=session.id,
+                                first_chunk_ms=first_chunk_ms,
+                            )
+                        chunk_count += 1
+                        total_chars += len(chunk)
                         response = StreamResponse(event="token", content=chunk, done=False)
                         yield f"data: {json.dumps(response.model_dump(mode='json'))}\n\n"
 
                 # Send final message indicating completion
                 final_response = StreamResponse(event="done", content="", done=True)
                 yield f"data: {json.dumps(final_response.model_dump(mode='json'))}\n\n"
+                logger.info(
+                    "stream_chat_response_finished",
+                    session_id=session.id,
+                    duration_ms=_elapsed_ms(stream_started),
+                    first_chunk_ms=first_chunk_ms,
+                    chunk_count=chunk_count,
+                    total_chars=total_chars,
+                )
 
             except Exception as e:
                 logger.exception(
                     "stream_chat_request_failed",
                     session_id=session.id,
                     error=str(e),
+                    duration_ms=_elapsed_ms(stream_started),
+                    first_chunk_ms=first_chunk_ms,
+                    chunk_count=chunk_count,
+                    total_chars=total_chars,
                 )
                 error_response = StreamResponse(
                     event="error",
@@ -167,6 +201,7 @@ async def chat_stream(
             "stream_chat_request_failed",
             session_id=session.id,
             error=str(e),
+            duration_ms=_elapsed_ms(request_started),
         )
         raise HTTPException(status_code=500, detail="Unable to process chat stream")
 
@@ -224,3 +259,8 @@ async def clear_chat_history(
     except Exception as e:
         logger.exception("clear_chat_history_failed", session_id=session.id, error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _elapsed_ms(started: float) -> float:
+    """Return elapsed wall-clock milliseconds for structured logs."""
+    return round((time.monotonic() - started) * 1000, 2)

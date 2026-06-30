@@ -48,6 +48,24 @@ describe('streamChat', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('waits for async onDone synchronization before resolving', async () => {
+    mockStreamResponse(['data: {"content":"","done":true}\n\n']);
+    const events: string[] = [];
+
+    await streamChat(
+      [{ role: 'user', content: '查询风险' }],
+      'token',
+      vi.fn(),
+      async () => {
+        await Promise.resolve();
+        events.push('done');
+      },
+      vi.fn(),
+    );
+
+    expect(events).toEqual(['done']);
+  });
+
   it('reports server error events through onError', async () => {
     mockStreamResponse(['data: {"event":"error","error":"模型调用失败","done":true}\n\n']);
 

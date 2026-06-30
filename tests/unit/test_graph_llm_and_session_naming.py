@@ -12,7 +12,10 @@ from app.services.llm.registry import LLMRegistry
 from app.services.llm.service import LLMService
 from app.services import session_naming
 from app.utils.graph import extract_text_content, prepare_messages, process_llm_response
-from app.schemas.chat import Message
+from app.schemas.chat import (
+    Message,
+    SessionTitle,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -24,12 +27,19 @@ class FakeRunnable:
         self.response = response
         self.error = error
         self.bound_tools: list[Any] = []
+        self.structured_calls: list[dict[str, Any]] = []
+        self.invocations: list[Any] = []
 
     def bind_tools(self, tools: list[Any]) -> "FakeRunnable":
         self.bound_tools = tools
         return self
 
+    def with_structured_output(self, schema: Any, **kwargs: Any) -> "FakeRunnable":
+        self.structured_calls.append({"schema": schema, "kwargs": kwargs})
+        return self
+
     async def ainvoke(self, _: Any) -> Any:
+        self.invocations.append(_)
         if self.error:
             raise self.error
         return self.response
@@ -151,6 +161,25 @@ async def test_llm_call_enforces_total_timeout(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(RuntimeError, match="timed out"):
         await service.call([])
+
+
+async def test_structured_llm_call_uses_json_mode_and_schema_instruction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Structured output uses JSON mode for OpenAI-compatible models that lack json_schema support."""
+    runnable = FakeRunnable(response=SessionTitle(title="北斗站点数量"))
+    monkeypatch.setattr(LLMRegistry, "LLMS", [{"name": "first", "llm": runnable}])
+    service = LLMService()
+    service._current_model_index = 0  # pyright: ignore[reportPrivateUsage]
+
+    result = await service.call(
+        [{"role": "user", "content": "现在北斗监测平台有多少监测点"}],
+        response_format=SessionTitle,
+    )
+
+    assert result.title == "北斗站点数量"
+    assert runnable.structured_calls[0]["kwargs"]["method"] == "json_mode"
+    assert runnable.invocations[0][-1]["role"] == "system"
+    assert "只输出一个 JSON object" in runnable.invocations[0][-1]["content"]
+    assert "title" in runnable.invocations[0][-1]["content"]
 
 
 @pytest.mark.parametrize(

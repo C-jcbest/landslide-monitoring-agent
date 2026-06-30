@@ -39,3 +39,11 @@
 - Record: 功能测试/前端验收与 LLM 输出评估是两类不同测试；测试账号只服务于功能验收和集成测试，不属于 `evals/` 的 LLM 输出质量评估流程。
 - Prevention: 功能测试失败时优先排查代码、测试数据、服务、数据库和环境配置；只有 LLM 输出质量、推理格式、工具调用行为或评估指标不达标时，才考虑优化系统提示词、评估提示词或 LangGraph agent prompt。
 - Links: `AGENTS.md`、`docs/tests/`、`evals/`
+
+### 2026-06-30 - 大体量监测事实与错误状态边界
+
+- Type: Correction
+- Area: agent | backend | frontend | tests | docs
+- Record: 北斗站点、GNSS 实时数据和日监测数据可能包含多站点、多月份、每小时或每分钟粒度的大体量事实；不得用固定字符数、固定条数预览或 `Message.content` 长度限制来裁剪事实数据以适配单次 LLM 输入。上下文预算应通过结构化事实存储、按任务检索、分块分析、聚合指标和 token 预算调度解决。
+- Prevention: 事实获取层应保存完整可追溯数据或数据引用；LLM 输入层只装载当前推理步骤需要的事实切片、统计摘要和证据引用。非人工澄清错误不得设置为 HITL 中断，只有显式 `interrupt()` 等待用户补充时才展示干预卡片；系统异常、上游失败、上下文超预算和响应组装失败应走结构化错误事件、可重试提示和日志。
+- Links: `AGENTS.md`、`docs/specs/005-beidou-station-resolution.md`、`app/core/langgraph/graph.py`

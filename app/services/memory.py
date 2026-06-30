@@ -1,5 +1,6 @@
 """Long-term memory service using mem0 and pgvector with optional cache layer."""
 
+import time
 from typing import Any
 
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
@@ -24,6 +25,7 @@ class MemoryService:
 
     async def _get_memory(self) -> AsyncMemory:
         if self._memory is None:
+            started = time.monotonic()
             deepseek_llm_config: dict[str, Any] = {
                 "model": settings.LONG_TERM_MEMORY_MODEL,
                 "api_key": SecretStr(settings.DEEPSEEK_API_KEY),
@@ -64,6 +66,7 @@ class MemoryService:
                     },
                 }
             )
+            logger.info("memory_client_initialized", duration_ms=_elapsed_ms(started))
         return self._memory
 
     async def initialize(self) -> None:
@@ -84,27 +87,58 @@ class MemoryService:
         no user_id is supplied (anonymous sessions skip long-term memory
         rather than pooling under a shared partition).
         """
+        started = time.monotonic()
         if user_id is None:
+            logger.info(
+                "memory_search_skipped",
+                reason="missing_user_id",
+                query_length=len(query),
+                duration_ms=_elapsed_ms(started),
+            )
             return ""
         try:
             # Check cache first
             key = cache_key("memory", str(user_id), query)
             cached = await cache_service.get(key)
             if cached is not None:
-                logger.debug("memory_search_cache_hit", user_id=user_id)
+                logger.info(
+                    "memory_search_finished",
+                    user_id=user_id,
+                    cache_hit=True,
+                    query_length=len(query),
+                    result_length=len(cached),
+                    result_count=None,
+                    duration_ms=_elapsed_ms(started),
+                )
                 return cached
 
             memory = await self._get_memory()
             results = await memory.search(user_id=str(user_id), query=query)
             result = "\n".join([f"* {r['memory']}" for r in results["results"]])
+            result_count = len(results.get("results", []))
 
             # Cache successful results
             if result:
                 await cache_service.set(key, result)
 
+            logger.info(
+                "memory_search_finished",
+                user_id=user_id,
+                cache_hit=False,
+                query_length=len(query),
+                result_length=len(result),
+                result_count=result_count,
+                duration_ms=_elapsed_ms(started),
+            )
             return result
         except Exception as e:
-            logger.error("failed_to_get_relevant_memory", error=str(e), user_id=user_id, query=query)
+            logger.error(
+                "failed_to_get_relevant_memory",
+                error=str(e),
+                user_id=user_id,
+                query_length=len(query),
+                duration_ms=_elapsed_ms(started),
+            )
             return ""
 
     async def add(self, user_id: str | None, messages: list[dict], metadata: dict | None = None) -> None:
@@ -112,14 +146,37 @@ class MemoryService:
 
         No-op when ``user_id`` is ``None`` (see ``search`` for rationale).
         """
+        started = time.monotonic()
         if user_id is None:
+            logger.info(
+                "memory_update_skipped",
+                reason="missing_user_id",
+                message_count=len(messages),
+                duration_ms=_elapsed_ms(started),
+            )
             return
         try:
             memory = await self._get_memory()
             await memory.add(messages, user_id=str(user_id), metadata=metadata)
-            logger.info("long_term_memory_updated_successfully", user_id=user_id)
+            logger.info(
+                "long_term_memory_updated_successfully",
+                user_id=user_id,
+                message_count=len(messages),
+                duration_ms=_elapsed_ms(started),
+            )
         except Exception as e:
-            logger.exception("failed_to_update_long_term_memory", user_id=user_id, error=str(e))
+            logger.exception(
+                "failed_to_update_long_term_memory",
+                user_id=user_id,
+                error=str(e),
+                message_count=len(messages),
+                duration_ms=_elapsed_ms(started),
+            )
 
 
 memory_service = MemoryService()
+
+
+def _elapsed_ms(started: float) -> float:
+    """Return elapsed wall-clock milliseconds for structured logs."""
+    return round((time.monotonic() - started) * 1000, 2)

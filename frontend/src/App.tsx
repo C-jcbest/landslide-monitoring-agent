@@ -25,6 +25,12 @@ interface ChatResponseData {
 }
 
 const isAbortError = (error: unknown) => error instanceof DOMException && error.name === 'AbortError';
+const FALLBACK_INTERRUPT_QUESTION = 'Agent 正在等待补充信息，请输入你的回复后继续。';
+
+interface NoticeState {
+  title: string;
+  message: string;
+}
 
 const buildToolStatus = (event: StreamEvent): string | null | undefined => {
   if (event.event === 'tool_start') {
@@ -56,6 +62,7 @@ export const App: React.FC = () => {
   const [isNewSessionDraft, setIsNewSessionDraft] = useState(false);
   const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [modalType, setModalType] = useState<'settings' | 'reports' | 'subscription' | 'logout_confirm' | 'delete_confirm' | 'beidou_credentials' | null>(null);
+  const [notice, setNotice] = useState<NoticeState | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<SessionInfo | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const activeSessionRef = useRef<SessionInfo | null>(activeSession);
@@ -65,6 +72,16 @@ export const App: React.FC = () => {
   useEffect(() => {
     activeSessionRef.current = activeSession;
   }, [activeSession]);
+
+  const showNotice = (title: string, message: string) => {
+    setNotice({ title, message });
+  };
+
+  const applyInterruptState = (interrupted?: boolean, question?: string | null) => {
+    const shouldInterrupt = Boolean(interrupted);
+    setIsInterrupted(shouldInterrupt);
+    setInterruptQuestion(shouldInterrupt ? question || FALLBACK_INTERRUPT_QUESTION : null);
+  };
 
   // Load user sessions upon successful login
   useEffect(() => {
@@ -132,8 +149,7 @@ export const App: React.FC = () => {
         const data = (await response.json()) as ChatResponseData;
         if (activeSessionRef.current?.session_id !== session.session_id) return;
         setMessages(data.messages || []);
-        setIsInterrupted(data.is_interrupted || false);
-        setInterruptQuestion(data.interrupt_question || null);
+        applyInterruptState(data.is_interrupted, data.interrupt_question);
       }
     } catch (err) {
       if (isAbortError(err)) return;
@@ -173,7 +189,7 @@ export const App: React.FC = () => {
         setActiveSession(updated);
       }
     } catch (err) {
-      alert('重命名失败，请重试。');
+      showNotice('重命名失败', '会话名称暂时无法保存，请稍后重试。');
     }
   };
 
@@ -208,7 +224,7 @@ export const App: React.FC = () => {
         }
       }
     } catch (err) {
-      alert('删除会话失败，请重试。');
+      showNotice('删除会话失败', '会话暂时无法删除，请稍后重试。');
     }
   };
 
@@ -246,7 +262,7 @@ export const App: React.FC = () => {
         activeSessionRef.current = newSession;
         setIsNewSessionDraft(false);
       } catch (err) {
-        alert('初始化监测会话失败，请重试。');
+        showNotice('初始化监测会话失败', '新会话暂时无法创建，请稍后重试。');
         setLoading(false);
         return;
       }
@@ -285,9 +301,11 @@ export const App: React.FC = () => {
           if (isAbortError(err)) return;
           if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
           console.error(err);
-          alert('接收流式回复出错，连接可能已断开，请重试。');
+          showNotice('流式传输中断', '本次回复没有完整返回。你可以检查网络或后端状态后重新发送。');
           setLoading(false);
+          setStreamingText('');
           setToolStatus(null);
+          applyInterruptState(false, null);
         },
         {
           signal: streamController.signal,
@@ -312,6 +330,7 @@ export const App: React.FC = () => {
 
   const handleSubmitInterrupt = async (response: string) => {
     if (!activeSession) return;
+    const pendingInterruptQuestion = interruptQuestion;
 
     const userResponse: Message = { role: 'user', content: response };
     const updatedMessages = [...messages, userResponse];
@@ -344,9 +363,11 @@ export const App: React.FC = () => {
           if (isAbortError(err)) return;
           if (activeSessionRef.current?.session_id !== requestSession.session_id) return;
           console.error(err);
-          alert('发送干预回复出错，请重试。');
+          showNotice('干预回复发送失败', '你的干预回复暂时没有发送成功，请稍后重试。');
           setLoading(false);
+          setStreamingText('');
           setToolStatus(null);
+          applyInterruptState(true, pendingInterruptQuestion);
         },
         {
           signal: streamController.signal,
@@ -383,8 +404,7 @@ export const App: React.FC = () => {
         setStreamingText('');
         setLoading(false);
         setToolStatus(null);
-        setIsInterrupted(data.is_interrupted || false);
-        setInterruptQuestion(data.interrupt_question || null);
+        applyInterruptState(data.is_interrupted, data.interrupt_question);
       }
 
       // Fetch sessions list from backend to check if the naming task has completed
@@ -611,6 +631,17 @@ export const App: React.FC = () => {
         onClose={() => setModalType(null)}
         userToken={userToken}
       />
+
+      <Modal
+        isOpen={notice !== null}
+        title={notice?.title || '系统提示'}
+        onClose={() => setNotice(null)}
+        confirmText="我知道了"
+        onConfirm={() => setNotice(null)}
+        showCancel={false}
+      >
+        <p className="text-sm text-neutral-600">{notice?.message}</p>
+      </Modal>
     </div>
   );
 };

@@ -1,6 +1,8 @@
 """Beidou station query service."""
 
 import time
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import (
     Any,
     Protocol,
@@ -16,6 +18,12 @@ from tenacity import (
 
 from app.core.config import settings
 from app.core.logging import logger
+from app.services.beidou.client import BeidouClient
+from app.services.beidou.credentials import BeidouCredentialRepository
+from app.services.beidou.crypto import (
+    BeidouCryptoError,
+    BeidouCryptoService,
+)
 from app.schemas.beidou_station import (
     BeidouPageInfo,
     BeidouSession,
@@ -43,6 +51,68 @@ class UnconfiguredBeidouSessionProvider:
         """Return no session until credential binding is wired in."""
         logger.info("beidou_session_provider_unconfigured", user_id=user_id)
         return None
+
+
+class CredentialBeidouSessionProvider:
+    """Resolve Beidou sessions from user-bound encrypted credentials."""
+
+    def __init__(
+        self,
+        repository: BeidouCredentialRepository,
+        client: BeidouClient,
+        crypto: BeidouCryptoService | None = None,
+        *,
+        now: Callable[[], datetime] | None = None,
+        session_ttl_seconds: int | None = None,
+    ) -> None:
+        """Initialize the provider with injectable persistence and upstream dependencies."""
+        self.repository = repository
+        self.client = client
+        self.crypto = crypto
+        self._now = now or (lambda: datetime.now(UTC))
+        self.session_ttl_seconds = session_ttl_seconds or settings.BEIDOU_SESSION_TTL_SECONDS
+
+    async def get_session(self, user_id: str) -> BeidouSession | None:
+        """Return a usable upstream session for the current local user."""
+        try:
+            local_user_id = int(user_id)
+        except ValueError:
+            logger.warning("beidou_session_user_id_invalid", user_id=user_id)
+            return None
+
+        credential = await self.repository.get_by_user_id(local_user_id)
+        if credential is None:
+            logger.info("beidou_session_missing", user_id=local_user_id)
+            return None
+
+        crypto = self._get_crypto()
+        if credential.session_uuid_encrypted and _is_future(credential.session_expires_at, self._now()):
+            try:
+                return BeidouSession(session_uuid=crypto.decrypt(credential.session_uuid_encrypted))
+            except BeidouCryptoError:
+                logger.exception("beidou_session_decrypt_failed", user_id=local_user_id)
+                return None
+
+        try:
+            password = crypto.decrypt(credential.encrypted_password)
+            login_result = await self.client.login(credential.beidou_username, password)
+        except Exception:
+            logger.exception("beidou_session_refresh_failed", user_id=local_user_id)
+            return None
+
+        refreshed_at = self._now()
+        credential.session_uuid_encrypted = crypto.encrypt(login_result.session_uuid)
+        credential.session_expires_at = refreshed_at + timedelta(seconds=self.session_ttl_seconds)
+        credential.last_verified_at = refreshed_at
+        credential.updated_at = refreshed_at
+        await self.repository.upsert(credential)
+        logger.info("beidou_session_refreshed", user_id=local_user_id, beidou_username=credential.beidou_username)
+        return BeidouSession(session_uuid=login_result.session_uuid)
+
+    def _get_crypto(self) -> BeidouCryptoService:
+        if self.crypto is None:
+            self.crypto = BeidouCryptoService(settings.BEIDOU_CREDENTIAL_ENCRYPTION_KEY)
+        return self.crypto
 
 
 class BeidouStationError(Exception):
@@ -212,6 +282,14 @@ def create_beidou_station_service() -> BeidouStationService:
     return BeidouStationService(BeidouStationClient())
 
 
+def create_beidou_session_provider() -> BeidouSessionProvider:
+    """Create the production user-scoped Beidou session provider."""
+    return CredentialBeidouSessionProvider(
+        BeidouCredentialRepository(),
+        BeidouClient(settings.BEIDOU_API_BASE_URL, timeout_seconds=settings.BEIDOU_API_TIMEOUT_SECONDS),
+    )
+
+
 def _error_from_response_code(response_code: str, response_msg: str) -> BeidouStationError:
     mapping = {
         "400000": ("beidou_permission_denied", False),
@@ -280,3 +358,11 @@ def _optional_int(value: Any) -> int | None:
     if value is None or value == "":
         return None
     return int(value)
+
+
+def _is_future(value: datetime | None, now: datetime) -> bool:
+    if value is None:
+        return False
+    comparable = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    current = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+    return comparable > current

@@ -38,6 +38,10 @@ install:
 dev:
 	@$(call run_with_env,uv run uvicorn app.main:app --reload --port 8000)
 
+dev-local:
+	$(call load_env_file)
+	@APP_ENV=$(ENV) $(DOCKER_COMPOSE) --env-file .env.$(ENV) -f docker-compose.yml -f docker-compose.dev.yml up -d db app
+
 staging:
 	@$(call run_with_env,$(MAKE) _serve ENV=staging)
 
@@ -195,6 +199,7 @@ help:
 	@echo ""
 	@echo "Server:"
 	@echo "  dev                  Dev server with hot reload (port 8000)"
+	@echo "  dev-local            Docker local dev: start DB + API with API hot reload"
 	@echo "  staging              Staging server"
 	@echo "  prod                 Production server"
 	@echo ""
@@ -244,7 +249,7 @@ help:
 	@echo "Misc:"
 	@echo "  clean                Remove .venv, __pycache__, .pytest_cache"
 
-.PHONY: install dev staging prod _serve \
+.PHONY: install dev dev-local staging prod _serve \
         migrate migration migrate-downgrade migrate-history \
         eval eval-quick eval-no-report test test-unit test-api test-integration test-e2e test-coverage test-connectivity test-embedding \
         lint format typecheck check pre-commit pre-commit-update \

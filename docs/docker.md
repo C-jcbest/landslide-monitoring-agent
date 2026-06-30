@@ -20,17 +20,29 @@ graph TB
     grafana --> prometheus
 ```
 
-Valkey 始终启动，但仅在您的 `.env` 文件中设置了 `VALKEY_HOST=valkey` 时被应用使用。未设置时，应用降级到内存缓存。
+完整堆栈会启动 Valkey，但仅在您的 `.env` 文件中设置了 `VALKEY_HOST=valkey` 时被应用使用。未设置时，应用降级到内存缓存。
 
 ## 命令
 
-### API + 数据库（开发中最常用）
+### 本地容器开发（推荐）
 
 ```bash
-make docker-up ENV=development     # 启动
+make dev-local ENV=development     # 启动 db + app，API 热重载
+make docker-down ENV=development   # 停止容器
+make docker-logs ENV=development   # 跟踪 API 和数据库日志
+```
+
+`dev-local` 会在容器内运行 API 和 PostgreSQL，并通过 `docker-compose.dev.yml` 覆盖 `app` 启动命令为 `uvicorn --reload`。本地修改 `app/` 下的后端代码后，容器内 `/app/app` 会同步变化，API 进程会自动重载。
+
+### API + 数据库（重新构建镜像）
+
+```bash
+make docker-up ENV=development     # 构建并启动
 make docker-down ENV=development   # 停止
 make docker-logs ENV=development   # 跟踪日志
 ```
+
+`docker-up` 每次都会带 `--build`，适合首次启动、依赖变更、Dockerfile 变更或需要确认镜像构建流程时使用。日常后端代码改动优先使用 `make dev-local`。
 
 ### 完整堆栈（包括 Prometheus + Grafana）
 
@@ -50,7 +62,7 @@ make docker-build ENV=production
 
 ## 在 Docker 中运行迁移
 
-`make docker-up` 后，针对容器化数据库运行迁移：
+`make dev-local` 或 `make docker-up` 后，针对容器化数据库运行迁移：
 
 ```bash
 make migrate ENV=development
@@ -68,7 +80,7 @@ cp .env.example .env.staging
 cp .env.example .env.production
 ```
 
-`docker-up` 和 `stack-up` 命令通过 `--env-file` 将环境文件传递给 Docker Compose。确保您的 Docker 环境文件中 `POSTGRES_HOST=db`（不是 `localhost`）— Compose 网络内的服务名是 `db`。
+`dev-local`、`docker-up` 和 `stack-up` 命令通过 `--env-file` 将环境文件传递给 Docker Compose。确保您的 Docker 环境文件中 `POSTGRES_HOST=db`（不是 `localhost`）— Compose 网络内的服务名是 `db`。
 
 ## Grafana
 

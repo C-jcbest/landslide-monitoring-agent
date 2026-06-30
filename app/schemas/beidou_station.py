@@ -7,8 +7,23 @@ from typing import (
 
 from pydantic import (
     BaseModel,
+    computed_field,
     Field,
 )
+
+STATION_TYPE_LABELS: dict[int, str] = {
+    1: "基准站",
+    2: "移动站单点模式",
+    3: "移动站 RTK 模式",
+    4: "中继站",
+}
+
+STATION_STATUS_LABELS: dict[int, str] = {
+    10: "正常",
+    20: "离线",
+    30: "告警",
+    40: "故障",
+}
 
 
 class BeidouSession(BaseModel):
@@ -56,6 +71,30 @@ class BeidouStation(BaseModel):
     longitude: str | None = None
     altitude: str | None = None
 
+    @computed_field
+    @property
+    def station_type_label(self) -> str | None:
+        """Human-readable Beidou station type label."""
+        return beidou_station_type_label(self.station_type)
+
+    @computed_field
+    @property
+    def station_type_description(self) -> str | None:
+        """Model-readable Beidou station type description."""
+        return beidou_station_enum_description("监测点类型", self.station_type, self.station_type_label)
+
+    @computed_field
+    @property
+    def station_status_label(self) -> str | None:
+        """Human-readable Beidou station status label."""
+        return beidou_station_status_label(self.station_status)
+
+    @computed_field
+    @property
+    def station_status_description(self) -> str | None:
+        """Model-readable Beidou station status description."""
+        return beidou_station_enum_description("监测点状态", self.station_status, self.station_status_label)
+
 
 class StationCandidate(BaseModel):
     """Narrow station candidate projection safe to send to the LLM."""
@@ -69,19 +108,44 @@ class StationCandidate(BaseModel):
     station_location: str | None = None
     base_station_name: str | None = None
 
+    @computed_field
+    @property
+    def station_type_label(self) -> str | None:
+        """Human-readable Beidou station type label."""
+        return beidou_station_type_label(self.station_type)
+
+    @computed_field
+    @property
+    def station_type_description(self) -> str | None:
+        """Model-readable Beidou station type description."""
+        return beidou_station_enum_description("监测点类型", self.station_type, self.station_type_label)
+
+    @computed_field
+    @property
+    def station_status_label(self) -> str | None:
+        """Human-readable Beidou station status label."""
+        return beidou_station_status_label(self.station_status)
+
+    @computed_field
+    @property
+    def station_status_description(self) -> str | None:
+        """Model-readable Beidou station status description."""
+        return beidou_station_enum_description("监测点状态", self.station_status, self.station_status_label)
+
 
 class AgentPlan(BaseModel):
-    """Structured planning result for the Plan node."""
+    """Structured planning result for the request planner node."""
 
-    route: Literal["chat", "gnss_analysis"] = "chat"
+    route: Literal["gnss", "unsupported"] = "unsupported"
     intent: Literal[
-        "chat",
-        "weather",
+        "unsupported",
         "station_groups",
         "station_list",
         "station_lookup",
         "station_detail",
         "gnss_analysis",
+        "report_pdf",
+        "subscription_action",
         "unknown",
     ] = "unknown"
     station_mentions: list[str] = Field(default_factory=list)
@@ -129,3 +193,26 @@ def station_to_candidate(station: BeidouStation) -> StationCandidate:
         station_location=station.station_location,
         base_station_name=station.base_station_name,
     )
+
+
+def beidou_station_type_label(value: int | None) -> str | None:
+    """Return the user-facing label for a Beidou StationType value."""
+    if value is None:
+        return None
+    return STATION_TYPE_LABELS.get(value, f"未知类型({value})")
+
+
+def beidou_station_status_label(value: int | None) -> str | None:
+    """Return the user-facing label for a Beidou StationStatus value."""
+    if value is None:
+        return None
+    return STATION_STATUS_LABELS.get(value, f"未知状态({value})")
+
+
+def beidou_station_enum_description(field_name: str, value: int | None, label: str | None) -> str | None:
+    """Return a compact description that preserves raw enum value and readable meaning."""
+    if value is None:
+        return None
+    if label is None:
+        return str(value)
+    return f"{label}（{field_name}={value}）"

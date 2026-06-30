@@ -49,4 +49,17 @@ describe('Modal Component', () => {
     fireEvent.click(confirmBtn);
     expect(handleConfirm).toHaveBeenCalledTimes(1);
   });
+
+  it('can render as a notice without a cancel button', () => {
+    render(
+      <Modal isOpen={true} title="系统提示" onClose={() => {}} onConfirm={() => {}} showCancel={false}>
+        <div>Notice Content</div>
+      </Modal>
+    );
+
+    expect(screen.getByText('系统提示')).toBeInTheDocument();
+    expect(screen.getByText('Notice Content')).toBeInTheDocument();
+    expect(screen.queryByText('取消')).not.toBeInTheDocument();
+    expect(screen.getByText('确认')).toBeInTheDocument();
+  });
 });

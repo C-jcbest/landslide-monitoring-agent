@@ -1,12 +1,13 @@
 """Tests for Beidou credential binding service."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from app.models.beidou_credential import BeidouCredential
 from app.services.beidou.client import BeidouLoginResult, BeidouRequestError
 from app.services.beidou.credentials import BeidouCredentialRepository, BeidouCredentialService
+from app.services.beidou.stations import CredentialBeidouSessionProvider
 
 pytestmark = pytest.mark.unit
 
@@ -103,6 +104,59 @@ async def test_bind_verifies_upstream_then_saves_encrypted_values() -> None:
     assert repository.saved.session_uuid_encrypted == "encrypted:550e8400-e29b-41d4-a716-446655440000"
     assert repository.saved.session_expires_at is not None
     assert repository.saved.session_expires_at.hour == 16
+
+
+async def test_session_provider_returns_bound_unexpired_session() -> None:
+    """Agent session provider resolves the encrypted session saved by credential binding."""
+    existing = BeidouCredential(
+        user_id=101,
+        beidou_username="fake_beidou_user",
+        encrypted_password="encrypted:FakePassword123!",
+        session_uuid_encrypted="encrypted:550e8400-e29b-41d4-a716-446655440000",
+        session_expires_at=fixed_now() + timedelta(hours=1),
+        last_verified_at=fixed_now(),
+        updated_at=fixed_now(),
+    )
+    client = FakeClient(BeidouLoginResult("unused"))
+    provider = CredentialBeidouSessionProvider(FakeRepository(existing), client, FakeCrypto(), now=fixed_now)
+
+    session = await provider.get_session("101")
+
+    assert session is not None
+    assert session.session_uuid == "550e8400-e29b-41d4-a716-446655440000"
+    assert client.calls == []
+
+
+async def test_session_provider_refreshes_expired_bound_session() -> None:
+    """Expired stored sessions are refreshed using the encrypted bound password."""
+    existing = BeidouCredential(
+        user_id=101,
+        beidou_username="fake_beidou_user",
+        encrypted_password="encrypted:FakePassword123!",
+        session_uuid_encrypted="encrypted:old-session",
+        session_expires_at=fixed_now() - timedelta(minutes=1),
+        last_verified_at=fixed_now(),
+        updated_at=fixed_now(),
+    )
+    repository = FakeRepository(existing)
+    client = FakeClient(BeidouLoginResult("550e8400-e29b-41d4-a716-446655440000"))
+    provider = CredentialBeidouSessionProvider(
+        repository,
+        client,
+        FakeCrypto(),
+        now=fixed_now,
+        session_ttl_seconds=28800,
+    )
+
+    session = await provider.get_session("101")
+
+    assert session is not None
+    assert session.session_uuid == "550e8400-e29b-41d4-a716-446655440000"
+    assert client.calls == [("fake_beidou_user", "FakePassword123!")]
+    assert repository.saved is existing
+    assert existing.session_uuid_encrypted == "encrypted:550e8400-e29b-41d4-a716-446655440000"
+    assert existing.session_expires_at is not None
+    assert existing.session_expires_at.hour == 16
 
 
 async def test_failed_update_keeps_existing_credential() -> None:

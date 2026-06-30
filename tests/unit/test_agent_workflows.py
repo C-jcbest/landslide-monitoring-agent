@@ -58,6 +58,17 @@ class FakeGraph:
         self.state = SimpleNamespace(next=(), tasks=[], values=self.response)
 
 
+class FakeMetadataGraph(FakeGraph):
+    """Graph fake that emits structured-node and response-node chunks."""
+
+    async def astream(self, graph_input: Any, config: dict[str, Any], stream_mode: str):
+        self.inputs.append(graph_input)
+        yield AIMessageChunk(content='{"route":"gnss"}'), {"langgraph_node": "request_planner"}
+        yield AIMessageChunk(content='{"ok":true}'), {"langgraph_node": "gnss_tools"}
+        yield AIMessageChunk(content="Final answer"), {"langgraph_node": "render"}
+        self.state = SimpleNamespace(next=(), tasks=[], values={"messages": [AIMessage(content="Final answer")]})
+
+
 async def test_get_response_uses_memory_and_persists_completed_conversation(monkeypatch: pytest.MonkeyPatch) -> None:
     """Normal graph invocation searches memory and schedules user-scoped persistence."""
     agent = LangGraphAgent()
@@ -102,6 +113,27 @@ async def test_stream_response_yields_text_and_updates_memory(monkeypatch: pytes
     assert chunks == ["Part one ", "part two"]
     assert memory.search_calls == [("user-1", "Question")]
     assert memory.add_calls[0][0] == "user-1"
+
+
+async def test_stream_response_filters_non_user_facing_graph_tokens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Structured planner/tool tokens must not be streamed into the chat transcript."""
+    agent = LangGraphAgent()
+    graph = FakeMetadataGraph()
+    memory = FakeMemoryService()
+
+    async def get_graph() -> FakeMetadataGraph:
+        return graph
+
+    monkeypatch.setattr(agent, "_get_graph", get_graph)
+    monkeypatch.setattr("app.core.langgraph.graph.memory_service", memory)
+
+    chunks = [
+        chunk
+        async for chunk in agent.get_stream_response([Message(role="user", content="Question")], "session-1", "user-1")
+    ]
+    await asyncio.sleep(0)
+
+    assert chunks == ["Final answer"]
 
 
 async def test_get_chat_history_returns_empty_when_checkpoint_has_no_values(monkeypatch: pytest.MonkeyPatch) -> None:

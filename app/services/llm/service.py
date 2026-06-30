@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from typing import (
     Any,
     Callable,
@@ -14,7 +15,10 @@ from typing import (
 )
 
 from langchain_core.language_models import LanguageModelInput
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import (
+    BaseMessage,
+    SystemMessage,
+)
 from openai import (
     APIError,
     APITimeoutError,
@@ -114,9 +118,9 @@ class LLMService:
             messages: Conversation messages to send.
             model_name: Override the model. ``None`` uses the current default.
             response_format: Pydantic schema for structured output. When
-                provided the call chains ``.with_structured_output(schema)``
-                and returns a validated instance of that schema instead of a
-                raw ``BaseMessage``.
+                provided the call chains ``.with_structured_output(schema,
+                method="json_mode")`` and returns a validated instance of
+                that schema instead of a raw ``BaseMessage``.
             **model_kwargs: Extra kwargs forwarded to ``LLMRegistry.get`` when
                 constructing a one-off model instance (e.g. ``temperature``,
                 ``max_tokens``, ``reasoning``).
@@ -188,13 +192,27 @@ class LLMService:
         Raises:
             OpenAIError: Propagated after all retry attempts are exhausted.
         """
+        started = time.monotonic()
+        model_name = _llm_name(llm)
+        logger.info(
+            "llm_call_started",
+            model=model_name,
+            message_count=_message_count(messages),
+        )
         try:
             response = await llm.ainvoke(messages)
-            logger.debug("llm_call_successful")
+            logger.info(
+                "llm_call_successful",
+                model=model_name,
+                duration_ms=_elapsed_ms(started),
+                message_count=_message_count(messages),
+            )
             return response
         except (RateLimitError, APITimeoutError, APIError) as e:
             logger.warning(
                 "llm_call_failed_retrying",
+                model=model_name,
+                duration_ms=_elapsed_ms(started),
                 error_type=type(e).__name__,
                 error=str(e),
                 exc_info=True,
@@ -203,6 +221,8 @@ class LLMService:
         except OpenAIError as e:
             logger.error(
                 "llm_call_failed",
+                model=model_name,
+                duration_ms=_elapsed_ms(started),
                 error_type=type(e).__name__,
                 error=str(e),
             )
@@ -253,10 +273,11 @@ class LLMService:
             ``get_target`` returns ``self._llm`` (tool-bound).
             ``advance`` calls ``_switch_to_next_model`` so bindings persist.
         """
+        structured_messages = _with_structured_output_instruction(messages, response_format)
 
         def _override_target(idx: int) -> Any:
             base = LLMRegistry.get(LLMRegistry.LLMS[idx]["name"], **model_kwargs)
-            return base.with_structured_output(response_format) if response_format else base
+            return base.with_structured_output(response_format, method="json_mode") if response_format else base
 
         def _default_target(_: int) -> Any:
             return self._llm
@@ -285,7 +306,7 @@ class LLMService:
             get_target = _default_target
             advance = _default_advance
 
-        return await self._fallback_loop(messages, start, get_target, advance)
+        return await self._fallback_loop(structured_messages, start, get_target, advance)
 
     async def _fallback_loop(
         self,
@@ -315,7 +336,15 @@ class LLMService:
 
         for models_tried in range(1, total + 1):
             current_name = LLMRegistry.LLMS[current]["name"]
+            attempt_started = time.monotonic()
             try:
+                logger.info(
+                    "llm_model_attempt_started",
+                    model=current_name,
+                    models_tried=models_tried,
+                    total_models=total,
+                    message_count=_message_count(messages),
+                )
                 return await self._invoke_with_retry(get_target(current), messages)
             except OpenAIError as e:
                 last_error = e
@@ -324,6 +353,7 @@ class LLMService:
                     model=current_name,
                     models_tried=models_tried,
                     total_models=total,
+                    duration_ms=_elapsed_ms(attempt_started),
                     error=str(e),
                 )
                 if models_tried >= total:
@@ -343,3 +373,47 @@ class LLMService:
 
 
 llm_service = LLMService()
+
+
+def _with_structured_output_instruction(
+    messages: LanguageModelInput,
+    response_format: Optional[Type[BaseModel]],
+) -> LanguageModelInput:
+    """Append JSON mode instructions for OpenAI-compatible structured output."""
+    if response_format is None or not isinstance(messages, list):
+        return messages
+
+    schema = response_format.model_json_schema()
+    instruction = (
+        f"请只输出一个 JSON object，不要输出 Markdown、代码块或额外解释。JSON 必须符合以下 Pydantic schema：{schema}"
+    )
+
+    if all(isinstance(message, dict) for message in messages):
+        return [*messages, {"role": "system", "content": instruction}]
+
+    if all(isinstance(message, BaseMessage) for message in messages):
+        return [*messages, SystemMessage(content=instruction)]
+
+    return messages
+
+
+def _elapsed_ms(started: float) -> float:
+    """Return elapsed wall-clock milliseconds for structured logs."""
+    return round((time.monotonic() - started) * 1000, 2)
+
+
+def _message_count(messages: LanguageModelInput) -> int | None:
+    """Return a safe count of input messages when the input is list-like."""
+    return len(messages) if isinstance(messages, list) else None
+
+
+def _llm_name(llm: Any) -> str:
+    """Return a best-effort model name without inspecting prompt contents."""
+    if hasattr(llm, "get_name"):
+        try:
+            return str(llm.get_name())
+        except Exception:
+            return type(llm).__name__
+    if hasattr(llm, "model_name"):
+        return str(llm.model_name)
+    return type(llm).__name__

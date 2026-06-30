@@ -11,7 +11,7 @@
 
 ## 选项 A：Docker（推荐）
 
-最快的方式。一个命令启动 API 和带 pgvector 的 PostgreSQL。
+最快的方式。一个命令在 Docker 容器内启动 API 和带 pgvector 的 PostgreSQL，并让 API 监听本地代码变更自动热重载。
 
 ```bash
 git clone <repo-url> my-agent
@@ -23,7 +23,7 @@ cp .env.example .env.development
 # 可选：LANGFUSE_* 密钥（或设置 LANGFUSE_TRACING_ENABLED=false）
 
 make install       # 安装 Python 依赖 + pre-commit hooks
-make docker-up     # 启动 API (port 8000) + PostgreSQL
+make dev-local     # 容器内启动 API (port 8000) + PostgreSQL，API 热重载
 make docker-migrate # 在应用容器内运行 Alembic 迁移
 ```
 
@@ -106,7 +106,7 @@ Hooks 包括：尾部空白检查、YAML/TOML/JSON 验证、秘密检测、ruff 
 ## 故障排除
 
 **启动时数据库连接错误**
-确保 PostgreSQL 正在运行，且 `.env` 中的 `POSTGRES_*` 变量匹配。使用 Docker：`make docker-up` 处理（包括迁移）。
+确保 PostgreSQL 正在运行，且 `.env` 中的 `POSTGRES_*` 变量匹配。容器内开发使用 `make dev-local` 启动 API 和数据库，然后运行 `make docker-migrate` 应用迁移。
 
 **`could not translate host name "db"`**
 `POSTGRES_HOST=db` 仅在 Docker 网络内解析（这是 Compose 服务名）。如果在主机上运行命令（例如本地 Python 流程中的 `make migrate` 或 `make dev`），请改为设置 `POSTGRES_HOST=localhost` — 数据库端口通过 `docker-compose.yml` 发布到主机。在容器内，保持使用 `db`。

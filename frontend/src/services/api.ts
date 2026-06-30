@@ -164,7 +164,7 @@ export async function streamChat(
   messages: Message[],
   sessionToken: string,
   onChunk: (text: string) => void,
-  onDone: () => void,
+  onDone: () => void | Promise<void>,
   onError: (err: unknown) => void,
   options: StreamChatOptions = {}
 ) {
@@ -222,7 +222,7 @@ export async function streamChat(
 
             if (parsed.done) {
               receivedDone = true;
-              onDone();
+              await onDone();
               return;
             }
           } catch (e) {

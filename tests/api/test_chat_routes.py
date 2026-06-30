@@ -24,6 +24,26 @@ async def _get_fake_graph() -> FakeGraph:
     return FakeGraph()
 
 
+async def test_interrupt_details_returns_fallback_question_when_interrupt_payload_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Interrupted graph states always expose a prompt so the frontend cannot lock without a reply card."""
+
+    class InterruptedGraph:
+        async def aget_state(self, _) -> SimpleNamespace:
+            return SimpleNamespace(next=("chat",), tasks=[SimpleNamespace(interrupts=[])])
+
+    async def get_graph() -> InterruptedGraph:
+        return InterruptedGraph()
+
+    monkeypatch.setattr(chatbot.agent, "_get_graph", get_graph)
+
+    is_interrupted, question = await chatbot._get_interrupt_details("session-101")  # pyright: ignore[reportPrivateUsage]
+
+    assert is_interrupted is True
+    assert question == "Agent 正在等待补充信息，请输入你的回复后继续。"
+
+
 async def test_chat_returns_agent_messages_and_request_id(client, monkeypatch: pytest.MonkeyPatch) -> None:
     """The JSON chat endpoint preserves the response schema without a real model."""
     received: dict[str, object] = {}

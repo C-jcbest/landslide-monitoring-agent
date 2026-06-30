@@ -138,7 +138,7 @@ llm = ChatOpenAI(
 git clone <repo-url> my-agent && cd my-agent
 cp .env.example .env.development   # 填写您的密钥
 make install
-make docker-up                     # 启动 API + PostgreSQL
+make dev-local                     # 容器内启动 API + PostgreSQL，API 热重载
 ```
 
 ### 自动化测试
@@ -218,7 +218,7 @@ evals/             # LLM 评估框架
 ### 设置与配置
 
 **需要 Docker 吗？**
-推荐但非必需。`make docker-up` 一起启动 API + PostgreSQL。纯本地设置请参见 [docs/getting-started.md](docs/getting-started.md)。
+推荐但非必需。容器内开发使用 `make dev-local` 启动 API + PostgreSQL，并启用 API 热重载；需要重新构建镜像时使用 `make docker-up`。纯本地设置请参见 [docs/getting-started.md](docs/getting-started.md)。
 
 **支持哪些 LLM 提供商？**
 目前：**仅 OpenAI**，通过 `app/services/llm/registry.py` 中的 `LLMRegistry`。多提供商支持（Anthropic、Google、OpenRouter）通过 LangChain 的 `init_chat_model` 已列入计划 — 参见 [#51](https://github.com/wassim249/fastapi-langgraph-agent-production-ready-template/issues/51)。通过 `.env.development` 中的 `DEFAULT_LLM_MODEL` 配置模型。
@@ -240,7 +240,7 @@ evals/             # LLM 评估框架
 ### 故障排除
 
 **API 无法启动**
-- 确保 PostgreSQL 正在运行（`make docker-up` 会随 API 一起启动）
+- 确保 PostgreSQL 正在运行（容器内开发可使用 `make dev-local` 随 API 一起启动）
 - 确认 `.env.development` 存在 — 从 `.env.example` 复制并填写必需密钥
 - 应用迁移：`make migrate`
 

@@ -9,6 +9,9 @@ from langchain_core.tools.base import BaseTool
 
 from .ask_human import ask_human
 from .duckduckgo_search import duckduckgo_search_tool
+from .gnss import gnss_read_only_tools
 from .open_meteo_weather import open_meteo_weather_tool
 
-tools: list[BaseTool] = [duckduckgo_search_tool, open_meteo_weather_tool, ask_human]
+read_only_tools: list[BaseTool] = [duckduckgo_search_tool, open_meteo_weather_tool]
+gnss_tools: list[BaseTool] = gnss_read_only_tools
+tools: list[BaseTool] = [*read_only_tools, ask_human]

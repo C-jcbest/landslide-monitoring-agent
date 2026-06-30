@@ -8,6 +8,7 @@ export interface ModalProps {
   onConfirm?: () => void;
   confirmText?: string;
   cancelText?: string;
+  showCancel?: boolean;
   children: React.ReactNode;
 }
 
@@ -18,6 +19,7 @@ export const Modal: React.FC<ModalProps> = ({
   onConfirm,
   confirmText = '确认',
   cancelText = '取消',
+  showCancel = true,
   children,
 }) => {
   // Lock body scroll when modal is open
@@ -61,12 +63,14 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-neutral-100 flex items-center justify-end gap-3 bg-neutral-50/50">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl text-neutral-600 hover:bg-neutral-100 border border-neutral-200 text-xs font-medium transition-colors"
-          >
-            {cancelText}
-          </button>
+          {showCancel && (
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-neutral-600 hover:bg-neutral-100 border border-neutral-200 text-xs font-medium transition-colors"
+            >
+              {cancelText}
+            </button>
+          )}
           {onConfirm && (
             <button
               onClick={onConfirm}
