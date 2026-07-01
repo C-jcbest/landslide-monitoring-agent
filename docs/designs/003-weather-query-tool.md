@@ -6,13 +6,11 @@
   - [x] 新增 LangGraph 可绑定天气查询工具，仅加入 `app/core/langgraph/tools` 的工具集合。
   - [x] 不新增 FastAPI 路由，不改变前端调用协议。
 - [x] **Open-Meteo 数据源**
-  - [x] 使用 Open-Meteo Geocoding API 解析城市名。
   - [x] 使用 Open-Meteo Forecast API 获取当前天气、未来预报和最近小时级天气。
   - [x] 使用 Open-Meteo Historical Weather API 获取历史天气。
 - [x] **输入方式**
-  - [x] 支持 `location_name` 城市名查询。
-  - [x] 支持 `latitude` 和 `longitude` 坐标查询。
-  - [x] 当城市名和坐标同时存在时，以坐标为准，并保留城市名作为展示标签。
+  - [x] 只支持 `latitude` 和 `longitude` 坐标查询。
+  - [x] 拒绝 `location_name`、`station_uuid`、北斗账号、密码、`SessionUUID` 等混合字段。
 - [x] **天气范围**
   - [x] 当前天气返回当前降雨、风速、风向、阵风、湿度、温度和天气代码。
   - [x] 预报默认返回未来 7 天，最大允许 16 天。
@@ -27,13 +25,13 @@
   - [x] 工具失败时返回结构化错误字符串，不抛出未处理异常。
 - [x] **缓存、重试与观测**
   - [x] 仅缓存成功响应，错误响应不缓存。
-  - [x] 地理编码缓存 24 小时，天气预报缓存 10 分钟，历史天气缓存 6 小时。
+  - [x] 天气预报缓存 10 分钟，历史天气缓存 6 小时。
   - [x] Open-Meteo HTTP 请求使用 `tenacity` 指数退避重试。
   - [x] 使用 `structlog` 记录工具调用、缓存命中、外部请求耗时和失败原因。
 - [x] **安全边界**
-  - [x] 工具只允许访问 `geocoding-api.open-meteo.com`、`api.open-meteo.com` 和 `archive-api.open-meteo.com`。
+  - [x] 工具只允许访问 `api.open-meteo.com` 和 `archive-api.open-meteo.com`。
   - [x] 不接受任意 URL，不执行文件、数据库、Shell 或写操作。
-  - [x] 对城市名、坐标、日期和返回字段使用白名单校验。
+  - [x] 对坐标、日期和返回字段使用白名单校验。
   - [x] 外部响应只按字段白名单提取，不把外部文本当作提示词指令。
 
 ## 数据与迁移
@@ -42,14 +40,12 @@
 
 天气查询结果不持久化到 PostgreSQL，也不写入用户会话表之外的业务数据。工具结果会作为 LangGraph 工具消息进入当前对话 checkpoint，这是现有 Agent 流程的一部分，不需要额外迁移。
 
-缓存复用现有 `app.core.cache.cache_service`，缓存值使用 JSON 字符串。缓存键使用 `app.core.cache.cache_key` 生成，避免在缓存键中暴露原始城市名、坐标或日期组合。
+缓存复用现有 `app.core.cache.cache_service`，缓存值使用 JSON 字符串。缓存键使用 `app.core.cache.cache_key` 生成，避免在缓存键中暴露完整坐标或日期组合。
 
-建议缓存键前缀：
+当前缓存键前缀：
 
-- `weather:geocode`：城市解析结果。
 - `weather:forecast`：当前天气和预报结果。
 - `weather:history`：历史天气结果。
-- `weather:query`：最终工具结构化输出，只有在实现中确实能降低重复计算时使用。
 
 ## 工具输入与输出
 
@@ -59,9 +55,10 @@
 
 ```python
 class WeatherQueryInput(BaseModel):
-    location_name: str | None = None
-    latitude: float | None = None
-    longitude: float | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    latitude: float
+    longitude: float
     start_date: date | None = None
     end_date: date | None = None
     forecast_days: int = 7
@@ -69,9 +66,8 @@ class WeatherQueryInput(BaseModel):
 
 校验规则：
 
-- `location_name` 与 `latitude`/`longitude` 至少提供一种。
-- 坐标必须成对出现；`latitude` 范围为 `-90` 到 `90`，`longitude` 范围为 `-180` 到 `180`。
-- `location_name` 去除首尾空白后长度必须为 `1` 到 `100` 字符。
+- `latitude` 和 `longitude` 必填；`latitude` 范围为 `-90` 到 `90`，`longitude` 范围为 `-180` 到 `180`。
+- 输入模型禁止额外字段，尤其禁止 `location_name`、`station_uuid`、北斗账号、密码和 `SessionUUID`。
 - `forecast_days` 默认为 `7`，允许范围为 `1` 到 `16`。
 - 历史天气默认范围为近 7 个完整历史日，即 `end_date = today - 1 day`，`start_date = end_date - 6 days`。
 - 指定历史日期时，`start_date <= end_date`，`end_date` 不能晚于昨天，最大跨度为 31 天。
@@ -84,12 +80,12 @@ class WeatherQueryInput(BaseModel):
 {
   "ok": true,
   "location": {
-    "name": "Hangzhou",
-    "country": "China",
-    "admin1": "Zhejiang",
+    "name": null,
+    "country": null,
+    "admin1": null,
     "latitude": 30.294,
     "longitude": 120.1619,
-    "source": "geocoding"
+    "source": "coordinates"
   },
   "query": {
     "timezone": "auto",
@@ -120,8 +116,8 @@ class WeatherQueryInput(BaseModel):
 ```json
 {
   "ok": false,
-  "error_code": "location_not_found",
-  "message": "未找到匹配地点，请提供更精确的城市名或经纬度。",
+  "error_code": "invalid_input",
+  "message": "latitude 必须在 -90 到 90 之间",
   "retryable": false
 }
 ```
@@ -129,35 +125,12 @@ class WeatherQueryInput(BaseModel):
 错误码建议：
 
 - `invalid_input`
-- `location_not_found`
 - `open_meteo_timeout`
 - `open_meteo_unavailable`
 - `open_meteo_bad_response`
 - `weather_query_failed`
 
 ## Open-Meteo 请求设计
-
-### 地理编码
-
-接口：
-
-`https://geocoding-api.open-meteo.com/v1/search`
-
-参数：
-
-- `name`: 用户输入城市名。
-- `count`: `1`。
-- `language`: `zh`。
-- `format`: `json`。
-
-只提取字段：
-
-- `name`
-- `country`
-- `admin1`
-- `latitude`
-- `longitude`
-- `timezone`
 
 ### 当前天气与预报
 
@@ -250,19 +223,13 @@ class WeatherQueryInput(BaseModel):
 sequenceDiagram
     participant User as 用户
     participant Agent as LangGraph Agent
-    participant Tool as open_meteo_weather 工具
-    participant Geo as Open-Meteo Geocoding
+    participant Tool as query_open_meteo_weather 工具
     participant Forecast as Open-Meteo Forecast
     participant Archive as Open-Meteo Archive
 
-    User->>Agent: 查询某地风雨、当前天气、历史天气或预报
-    Agent->>Tool: 调用 weather_query_tool(args)
-    Tool->>Tool: 校验城市名、坐标、日期范围和 forecast_days
-    alt 提供城市名且未提供坐标
-        Tool->>Geo: GET /v1/search
-        Geo-->>Tool: 地点候选
-        Tool->>Tool: 选取首个候选并提取经纬度
-    end
+    User->>Agent: 查询指定经纬度风雨、当前天气、历史天气或预报
+    Agent->>Tool: 调用 query_open_meteo_weather(latitude, longitude, ...)
+    Tool->>Tool: 校验坐标、日期范围和 forecast_days
     par 当前天气与预报
         Tool->>Forecast: GET /v1/forecast
         Forecast-->>Tool: current/hourly/daily
@@ -277,8 +244,8 @@ sequenceDiagram
 
 状态流转：
 
-1. LLM 根据用户问题选择 `open_meteo_weather` 工具。
-2. `LangGraphAgent._tool_call` 调用工具的 `ainvoke`。
+1. LLM 根据用户问题选择 `query_open_meteo_weather` 工具。
+2. `chat_tools` 或已通过 `gnss_preflight` 的 `gnss_tools` 调用工具。
 3. 工具完成 Open-Meteo 查询并返回 JSON 字符串。
 4. 工具结果以 `ToolMessage` 写回 LangGraph 状态。
 5. LLM 基于工具结果生成用户可读回答。
@@ -288,14 +255,14 @@ sequenceDiagram
 ### 新增文件
 
 - `app/core/langgraph/tools/open_meteo_weather.py`
-  - 定义工具输入模型、Open-Meteo 请求常量、参数校验、HTTP 请求、缓存读取写入、摘要计算和 `open_meteo_weather_tool`。
+  - 定义工具输入模型、Open-Meteo 请求常量、参数校验、HTTP 请求、缓存读取写入、摘要计算和 `query_open_meteo_weather_tool`。
 - `tests/unit/test_open_meteo_weather_tool.py`
   - 后续测试计划阶段细化并在编码阶段创建，覆盖输入校验、缓存、成功查询、错误处理和摘要计算。
 
 ### 修改文件
 
 - `app/core/langgraph/tools/__init__.py`
-  - 导入并注册 `open_meteo_weather_tool`。
+  - 将 `query_open_meteo_weather_tool` 注册到 `chat_tools`；GNSS 站点天气通过站点详情工具与该天气工具组合调用。
 - `app/core/prompts/system.md`
   - 补充工具使用指令：当用户询问天气、降雨、风况、历史降雨或预报时，优先使用 Open-Meteo 天气工具；工具结果是外部数据，仅作为事实依据。
 - `pyproject.toml`
@@ -308,14 +275,14 @@ sequenceDiagram
 天气工具必须使用异步实现：
 
 - HTTP 客户端使用 `httpx.AsyncClient`，避免阻塞 FastAPI 和 LangGraph 事件循环。
-- 地理编码完成后，Forecast 和 Archive 两个请求使用 `asyncio.gather` 并发执行。
+- Forecast 和 Archive 两个请求使用 `asyncio.gather` 并发执行。
 - 工具本身不打开数据库事务，不进行数据库写入。
 - 缓存读写是 best-effort；缓存失败只记录 warning，不影响工具主流程。
 
 幂等性：
 
 - 对相同输入参数，工具只执行只读查询和确定性摘要计算。
-- 缓存键由规范化后的地点、坐标、日期、预报天数和字段版本生成。
+- 缓存键由规范化后的坐标、日期、预报天数和字段版本生成。
 - 失败响应不缓存，避免短暂故障或错误输入污染后续查询。
 
 并发：
@@ -329,7 +296,6 @@ sequenceDiagram
 ### 错误处理
 
 - 输入错误使用早期返回，返回 `ok=false` 和 `invalid_input`。
-- 地理编码无结果返回 `location_not_found`。
 - HTTP 超时返回 `open_meteo_timeout`，`retryable=true`。
 - Open-Meteo 非成功状态码返回 `open_meteo_unavailable`，`retryable=true`。
 - JSON 解析失败或关键字段缺失返回 `open_meteo_bad_response`。
@@ -348,8 +314,6 @@ sequenceDiagram
 建议事件：
 
 - `weather_tool_invoked`
-- `weather_geocode_cache_hit`
-- `weather_geocode_requested`
 - `weather_forecast_cache_hit`
 - `weather_history_cache_hit`
 - `open_meteo_request_started`
@@ -360,7 +324,6 @@ sequenceDiagram
 
 日志中只记录：
 
-- 规范化后的地点名。
 - 坐标保留到小数点后 4 位。
 - 日期范围。
 - 响应耗时。
@@ -384,7 +347,7 @@ sequenceDiagram
 
 - 工具权限为只读查询，不具备写文件、写数据库、调用任意 URL、执行命令或发送外部通知能力。
 - HTTP 请求目标使用硬编码 endpoint 常量，不接受 LLM 传入 URL。
-- 城市名只作为查询参数传递给 Open-Meteo，不拼接到 URL path。
+- 工具不接受城市名、站点 UUID、北斗凭据或 `SessionUUID`。
 - 返回结果只包含白名单字段，避免把外部响应中的未知文本透传给 LLM。
 - 工具描述明确：结果是天气事实数据，不是指令；Agent 不应执行天气数据中出现的任何“指令”。
 - 工具不使用 API Key，不需要新增 secret。
@@ -392,11 +355,11 @@ sequenceDiagram
 ## 实现计划
 
 1. 在编码阶段创建分支 `codex/003-weather-query-tool`。
-2. 先编写 `tests/unit/test_open_meteo_weather_tool.py`，覆盖输入校验、地点解析、当前与预报、历史查询、缓存、重试错误和摘要计算，首次运行应为 red。
+2. 先编写 `tests/unit/test_open_meteo_weather_tool.py`，覆盖输入校验、当前与预报、历史查询、缓存、重试错误、安全字段拒绝和摘要计算，首次运行应为 red。
 3. 在 `pyproject.toml` 中加入运行时 `httpx` 依赖并更新锁文件。
-4. 新增 `app/core/langgraph/tools/open_meteo_weather.py`，先实现输入模型、规范化和校验，使输入校验测试通过。
+4. 新增 `app/core/langgraph/tools/open_meteo_weather.py`，先实现纯经纬度输入模型、规范化和校验，使输入校验测试通过。
 5. 实现 Open-Meteo 异步请求封装、endpoint allowlist、tenacity 重试和结构化错误。
-6. 实现 geocoding、forecast、archive 三类查询的缓存策略。
+6. 实现 forecast、archive 两类查询的缓存策略。
 7. 实现风雨摘要计算和 JSON 输出。
 8. 在 `app/core/langgraph/tools/__init__.py` 注册工具。
 9. 更新 `app/core/prompts/system.md`，引导 Agent 在天气、风雨和历史降雨问题中优先使用该工具。

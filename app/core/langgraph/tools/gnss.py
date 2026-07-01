@@ -54,16 +54,8 @@ get_beidou_station_detail_tool = StructuredTool.from_function(
     args_schema=StationDetailToolInput,
 )
 
-get_beidou_station_weather_tool = StructuredTool.from_function(
-    coroutine=_tool_requires_graph_context,
-    name="get_beidou_station_weather",
-    description="按 station_uuid 读取站点经纬度并查询天气事实，用于降雨和 GNSS 分析。只读工具。",
-    args_schema=StationDetailToolInput,
-)
-
 gnss_read_only_tools: list[BaseTool] = [
     get_beidou_station_groups_tool,
     get_beidou_station_candidates_tool,
     get_beidou_station_detail_tool,
-    get_beidou_station_weather_tool,
 ]

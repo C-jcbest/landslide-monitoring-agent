@@ -136,9 +136,11 @@ class StationCandidate(BaseModel):
 class AgentPlan(BaseModel):
     """Structured planning result for the request planner node."""
 
-    route: Literal["gnss", "unsupported"] = "unsupported"
+    route: Literal["chat", "gnss"] = "chat"
     intent: Literal[
         "unsupported",
+        "chat",
+        "weather",
         "station_groups",
         "station_list",
         "station_lookup",
@@ -166,6 +168,9 @@ class GateDecision(BaseModel):
     confidence: Literal["high", "medium", "low"] = "low"
     clarification_question: str | None = None
     candidate_ids: list[str] = Field(default_factory=list)
+    reason_code: str | None = None
+    retryable: bool = False
+    user_action: str | None = None
     reason: str = ""
 
 

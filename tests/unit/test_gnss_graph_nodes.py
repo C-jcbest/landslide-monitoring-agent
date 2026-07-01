@@ -9,7 +9,9 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
+from app.core.langgraph import graph as graph_module
 from app.core.langgraph.graph import LangGraphAgent
+from app.core.langgraph.tools import open_meteo_weather as weather_module
 from app.schemas.beidou_station import (
     AgentPlan,
     BeidouSession,
@@ -136,7 +138,7 @@ class FakeWeatherService:
 
 
 async def test_request_planner_routes_gnss_request_to_gnss_agent() -> None:
-    """GNSS requests enter the GNSS business agent branch."""
+    """GNSS requests enter the GNSS authorization preflight branch."""
     agent = LangGraphAgent()
     agent.llm_service = FakeLLMService(
         [AgentPlan(route="gnss", intent="station_list", needs_station=False, reason="北斗站点数量查询。")]
@@ -145,7 +147,7 @@ async def test_request_planner_routes_gnss_request_to_gnss_agent() -> None:
 
     command = await agent._request_planner(state, _config())  # pyright: ignore[reportPrivateUsage]
 
-    assert command.goto == "gnss_agent"
+    assert command.goto == "gnss_preflight"
     assert command.update["route"] == "gnss"
     assert command.update["gnss_tool_rounds"] == 0
 
@@ -200,19 +202,73 @@ async def test_request_planner_context_excludes_tool_messages() -> None:
     assert "用户：重新查询" in planner_context
 
 
-async def test_request_planner_routes_unsupported_request_to_render() -> None:
-    """Non-monitoring requests are rendered as unsupported without reaching tools."""
+async def test_request_planner_routes_weather_request_to_chat() -> None:
+    """Non-GNSS weather requests enter ordinary chat without Beidou authorization."""
     agent = LangGraphAgent()
     agent.llm_service = FakeLLMService(
-        [AgentPlan(route="unsupported", intent="unsupported", reason="普通天气闲聊不属于 GNSS 监测业务。")]
+        [AgentPlan(route="chat", intent="weather", reason="普通天气查询不属于 GNSS 授权业务。")]
     )
     state = GraphState(messages=[HumanMessage(content="今天有雨吗？")])
 
     command = await agent._request_planner(state, _config())  # pyright: ignore[reportPrivateUsage]
 
+    assert command.goto == "chat"
+    assert command.update["route"] == "chat"
+    assert command.update["unsupported_reason"] == ""
+
+
+async def test_gnss_preflight_auth_missing_routes_to_render_without_agent() -> None:
+    """GNSS requests without Beidou credentials stop before the GNSS agent."""
+    agent = LangGraphAgent()
+    agent.llm_service = FakeLLMService([])
+    agent.beidou_session_provider = FakeSessionProvider(None)
+    state = GraphState(
+        messages=[HumanMessage(content="列出我的北斗站点")],
+        route="gnss",
+        plan=AgentPlan(route="gnss", intent="station_list"),
+    )
+
+    command = await agent._gnss_preflight(state, _config())  # pyright: ignore[reportPrivateUsage]
+
     assert command.goto == "render"
-    assert command.update["route"] == "unsupported"
-    assert "普通天气闲聊" in command.update["unsupported_reason"]
+    assert command.update["gate"].status == "auth_missing"
+    assert command.update["gate"].reason_code == "beidou_credential_missing"
+    assert agent.llm_service.calls == []
+
+
+async def test_chat_tools_weather_does_not_require_beidou_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ordinary weather calls execute in chat_tools without resolving a Beidou session."""
+    agent = LangGraphAgent()
+    agent.beidou_session_provider = FakeSessionProvider(None)
+    weather_calls: list[dict[str, Any]] = []
+
+    async def fake_weather(**kwargs: Any) -> str:
+        weather_calls.append(kwargs)
+        return '{"ok":true,"rain_summary":{"recent_24h_precipitation":2.4}}'
+
+    monkeypatch.setattr(weather_module, "query_open_meteo_weather", fake_weather)
+    state = GraphState(
+        messages=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "query_open_meteo_weather",
+                        "args": {"latitude": 30.294, "longitude": 120.1619},
+                        "id": "call-weather",
+                    }
+                ],
+            )
+        ],
+        route="chat",
+    )
+
+    command = await agent._chat_tools(state, _config(user_id=None))  # pyright: ignore[reportPrivateUsage]
+
+    assert command.goto == "chat"
+    assert weather_calls == [{"latitude": 30.294, "longitude": 120.1619, "start_date": None, "end_date": None, "forecast_days": 7}]
+    assert agent.beidou_session_provider.calls == []
+    assert command.update["messages"][0].name == "query_open_meteo_weather"
 
 
 async def test_gnss_agent_routes_tool_calls_to_gnss_tools() -> None:
@@ -271,6 +327,100 @@ async def test_gnss_tools_execute_with_user_scoped_session() -> None:
     assert SESSION_UUID not in str(message.content)
 
 
+async def test_gnss_station_weather_requires_detail_then_coordinate_weather(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Station weather is composed from station detail and coordinate weather calls."""
+    agent = LangGraphAgent()
+    station_service = FakeStationService([_candidate()])
+    agent.beidou_session_provider = FakeSessionProvider(BeidouSession(session_uuid=SESSION_UUID))
+    agent.beidou_station_service = station_service
+    weather_calls: list[dict[str, Any]] = []
+
+    async def fake_weather(**kwargs: Any) -> str:
+        weather_calls.append(kwargs)
+        return '{"ok":true,"rain_summary":{"recent_24h_precipitation":18.6}}'
+
+    monkeypatch.setattr(graph_module, "query_open_meteo_weather", fake_weather)
+
+    detail_state = GraphState(
+        messages=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "get_beidou_station_detail",
+                        "args": {"station_uuid": STATION_UUID},
+                        "id": "call-detail",
+                    }
+                ],
+            )
+        ],
+        route="gnss",
+    )
+    detail_command = await agent._gnss_tools(detail_state, _config())  # pyright: ignore[reportPrivateUsage]
+    detail_payload = detail_command.update["messages"][0].content
+
+    assert station_service.detail_calls == [STATION_UUID]
+    assert "latitude" in str(detail_payload)
+    assert weather_calls == []
+
+    weather_state = GraphState(
+        messages=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "query_open_meteo_weather",
+                        "args": {"latitude": 39.759630522, "longitude": 116.986252277},
+                        "id": "call-weather",
+                    }
+                ],
+            )
+        ],
+        route="gnss",
+    )
+    weather_command = await agent._gnss_tools(weather_state, _config())  # pyright: ignore[reportPrivateUsage]
+
+    assert weather_command.goto == "gnss_agent"
+    assert weather_calls == [
+        {
+            "latitude": 39.759630522,
+            "longitude": 116.986252277,
+            "start_date": None,
+            "end_date": None,
+            "forecast_days": 7,
+        }
+    ]
+    assert "rain_summary" in str(weather_command.update["messages"][0].content)
+
+
+async def test_removed_station_weather_wrapper_is_not_authorized() -> None:
+    """The old mixed station-weather tool is no longer accepted by GNSS tools."""
+    agent = LangGraphAgent()
+    agent.beidou_session_provider = FakeSessionProvider(BeidouSession(session_uuid=SESSION_UUID))
+    state = GraphState(
+        messages=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "get_beidou_station_weather",
+                        "args": {"station_uuid": STATION_UUID},
+                        "id": "call-weather",
+                    }
+                ],
+            )
+        ],
+        route="gnss",
+    )
+
+    command = await agent._gnss_tools(state, _config())  # pyright: ignore[reportPrivateUsage]
+
+    assert command.goto == "gnss_agent"
+    assert "unknown_gnss_tool" in str(command.update["messages"][0].content)
+
+
 async def test_gnss_agent_routes_final_reply_to_action_router() -> None:
     """When fact collection is done, GNSS agent stores the reply and enters action routing."""
     agent = LangGraphAgent()
@@ -307,16 +457,16 @@ async def test_action_router_blocks_subscription_side_effects_until_hitl_exists(
     assert "不会执行订阅创建" in content
 
 
-async def test_render_returns_unsupported_boundary() -> None:
-    """Unsupported requests receive a monitoring capability boundary response."""
+async def test_render_returns_chat_response() -> None:
+    """Ordinary chat requests render the chat response directly."""
     agent = LangGraphAgent()
     state = GraphState(
         messages=[HumanMessage(content="讲个笑话")],
-        route="unsupported",
-        unsupported_reason="该请求不属于当前 GNSS/北斗监测业务范围。",
+        route="chat",
+        chat_response="这是普通 chat 回复。",
     )
 
     command = await agent._render(state, _config())  # pyright: ignore[reportPrivateUsage]
 
     assert command.goto == "__end__"
-    assert "北斗站点" in command.update["messages"][0].content
+    assert command.update["messages"][0].content == "这是普通 chat 回复。"
